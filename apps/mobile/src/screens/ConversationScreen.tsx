@@ -1,5 +1,12 @@
 import { useState, useSyncExternalStore } from "react";
-import { SafeAreaView, ScrollView, StyleSheet, View } from "react-native";
+import {
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  View
+} from "react-native";
 import { AssistantMessageCard } from "../components/AssistantMessageCard";
 import { ConversationHeader } from "../components/ConversationHeader";
 import { InputBar } from "../components/InputBar";
@@ -12,6 +19,8 @@ import { tokens } from "../theme/tokens";
 const toolChips = ["快速", "总结文档", "拍题答疑"];
 
 export function ConversationScreen() {
+  const topOffset =
+    Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) + 10 : 16;
   const [draft, setDraft] = useState("");
   const taskState = useSyncExternalStore(
     taskStore.subscribe,
@@ -25,7 +34,7 @@ export function ConversationScreen() {
       : "新对话";
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { paddingTop: topOffset }]}>
       <ConversationHeader
         title={title}
         subtitle="内容由 AI 生成"
@@ -71,7 +80,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 16,
-    paddingTop: 6,
     paddingBottom: 10,
     gap: 10,
     backgroundColor: tokens.colors.canvas

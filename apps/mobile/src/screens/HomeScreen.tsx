@@ -1,8 +1,10 @@
 import { useSyncExternalStore } from "react";
 import {
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   View
@@ -46,6 +48,8 @@ const capabilities = [
 ];
 
 export function HomeScreen() {
+  const topOffset =
+    Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) + 14 : 18;
   const taskState = useSyncExternalStore(
     taskStore.subscribe,
     taskStore.getSnapshot,
@@ -79,7 +83,7 @@ export function HomeScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingTop: topOffset }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.topBar}>
@@ -179,7 +183,6 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 18,
-    paddingTop: 8,
     paddingBottom: 144,
     gap: 14
   },
