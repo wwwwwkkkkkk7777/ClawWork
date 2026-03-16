@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "lint": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run test/app.integration.test.ts"
+    "test": "vitest run test"
   },
   "dependencies": {
     "@clawwork/auth": "workspace:*",

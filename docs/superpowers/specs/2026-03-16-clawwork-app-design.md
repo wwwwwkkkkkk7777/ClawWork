@@ -697,3 +697,12 @@ Primary risks carried into implementation:
 ## 19. Implementation Direction
 
 The next phase should create a detailed implementation plan for this approved design, then execute the skeleton in increments with verification at each stage.
+
+## 20. Foundation Implementation Notes
+
+Current foundation progress:
+
+- Monorepo workspace, shared contracts, config, auth, and database packages are implemented
+- `mobile-api`, `task-router`, `openclaw-adapter`, and `file-parser-worker` all have baseline tests
+- The Expo mobile shell includes the approved task-first page structure and input flow placeholders
+- Local Postgres host binding uses `55432` to avoid a conflicting host-side Postgres listener on `5432`

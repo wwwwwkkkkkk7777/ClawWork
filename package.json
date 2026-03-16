@@ -9,11 +9,16 @@
     "check:workspace": "node scripts/check-workspace.mjs",
     "compose:check": "powershell -NoProfile -File scripts/check-compose.ps1",
     "compose:up": "docker compose -f infra/compose/docker-compose.yml up -d",
-    "compose:down": "docker compose -f infra/compose/docker-compose.yml down -v"
+    "compose:down": "docker compose -f infra/compose/docker-compose.yml down -v",
+    "smoke:backend": "powershell -NoProfile -File scripts/smoke-backend.ps1"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
+    "@types/supertest": "^6.0.3",
+    "@types/ws": "^8.18.1",
+    "supertest": "^7.1.4",
     "typescript": "^5.8.2",
-    "vitest": "^3.0.8"
+    "vitest": "^3.0.8",
+    "ws": "^8.18.3"
   }
 }
