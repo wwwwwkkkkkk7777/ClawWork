@@ -54,24 +54,27 @@ export function ConversationScreen() {
         )}
       </ScrollView>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.toolRow}
-      >
-        {toolChips.map((label) => (
-          <QuickChip key={label} label={label} onPress={() => setDraft(label)} />
-        ))}
-      </ScrollView>
+      <View testID="conversation-composer-dock" style={styles.composerDock}>
+        <ScrollView
+          horizontal
+          style={styles.toolRail}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.toolRow}
+        >
+          {toolChips.map((label) => (
+            <QuickChip key={label} label={label} onPress={() => setDraft(label)} />
+          ))}
+        </ScrollView>
 
-      <InputBar
-        value={draft}
-        onChangeText={setDraft}
-        onSend={() => {
-          taskStore.appendFollowUp(draft);
-          setDraft("");
-        }}
-      />
+        <InputBar
+          value={draft}
+          onChangeText={setDraft}
+          onSend={() => {
+            taskStore.appendFollowUp(draft);
+            setDraft("");
+          }}
+        />
+      </View>
     </SafeAreaView>
   );
 }
@@ -90,6 +93,12 @@ const styles = StyleSheet.create({
   streamContent: {
     paddingTop: 4,
     paddingBottom: 6
+  },
+  composerDock: {
+    gap: 6
+  },
+  toolRail: {
+    flexGrow: 0
   },
   toolRow: {
     alignItems: "center",
