@@ -1,7 +1,9 @@
 export type GatewayChallengeFrame = {
   type: "event";
   event: "connect.challenge";
-  payload: Record<string, never>;
+  payload: {
+    nonce?: string;
+  };
 };
 
 export type GatewaySuccessResponse = {
@@ -10,6 +12,12 @@ export type GatewaySuccessResponse = {
   ok: true;
   payload: {
     runId?: string;
+    status?: string;
+    snapshot?: {
+      sessionDefaults?: {
+        mainSessionKey?: string;
+      };
+    };
   };
 };
 
@@ -26,7 +34,23 @@ export type GatewayErrorResponse = {
 export type GatewayFrame =
   | GatewayChallengeFrame
   | GatewaySuccessResponse
-  | GatewayErrorResponse;
+  | GatewayErrorResponse
+  | GatewayEventFrame;
+
+export type GatewayEventFrame = {
+  type: "event";
+  event: "agent" | "chat" | string;
+  payload: {
+    runId?: string;
+    sessionKey?: string;
+    state?: string;
+    errorMessage?: string;
+    stream?: string;
+    ts?: number;
+    data?: Record<string, unknown>;
+    message?: unknown;
+  };
+};
 
 export type GatewayRequest = {
   type: "req";

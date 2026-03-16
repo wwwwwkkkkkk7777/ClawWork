@@ -28,3 +28,5 @@ export const TaskStreamEventSchema = z.discriminatedUnion("type", [
     message: z.string()
   })
 ]);
+
+export type TaskStreamEvent = z.infer<typeof TaskStreamEventSchema>;

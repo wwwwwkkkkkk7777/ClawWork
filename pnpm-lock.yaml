@@ -87,6 +87,9 @@ importers:
       '@clawwork/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@clawwork/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
       '@nestjs/common':
         specifier: ^11.1.6
         version: 11.1.16(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -103,12 +106,18 @@ importers:
         specifier: ^7.8.2
         version: 7.8.2
     devDependencies:
+      '@clawwork/openclaw-adapter':
+        specifier: workspace:*
+        version: link:../openclaw-adapter
       '@types/node':
         specifier: ^22.19.15
         version: 22.19.15
       '@types/supertest':
         specifier: ^6.0.3
         version: 6.0.3
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
       supertest:
         specifier: ^7.1.4
         version: 7.2.2
@@ -118,12 +127,18 @@ importers:
       vitest:
         specifier: ^3.2.4
         version: 3.2.4(@types/node@22.19.15)(jiti@2.6.1)(jsdom@20.0.3)(lightningcss@1.27.0)(terser@5.46.0)(tsx@4.21.0)
+      ws:
+        specifier: ^8.18.3
+        version: 8.19.0
 
   apps/openclaw-adapter:
     dependencies:
       '@clawwork/openclaw-protocol':
         specifier: workspace:*
         version: link:../../packages/openclaw-protocol
+      '@clawwork/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
       ws:
         specifier: ^8.18.3
         version: 8.19.0

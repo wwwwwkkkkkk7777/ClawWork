@@ -16,7 +16,9 @@ ClawWork is a monorepo for the mobile app, backend service baselines, shared con
 1. `pnpm install`
 2. `pnpm compose:up`
 3. Copy `.env.example` to `.env` if you want a local env file, then set `OPENCLAW_GATEWAY_URL`
-4. `pnpm smoke:backend`
-5. `pnpm --filter @clawwork/mobile start`
+4. Start the Gateway bridge with `pnpm --filter @clawwork/openclaw-adapter start`
+5. Start the mobile API with `pnpm --filter @clawwork/mobile-api start`
+6. `pnpm smoke:backend`
+7. `pnpm --filter @clawwork/mobile start`
 
 Detailed local workflow lives in [local-run.md](/d:/Desktop/ClawWork/.worktrees/clawwork-foundation/docs/development/local-run.md).

@@ -11,10 +11,13 @@
 1. Run `pnpm install`
 2. Start local infra with `pnpm compose:up`
 3. Use `DATABASE_URL=postgresql://postgres:postgres@localhost:55432/clawwork?schema=public`
-4. Set `OPENCLAW_GATEWAY_URL` to the real Gateway, or keep the smoke default for local verification
+4. Start `pnpm --filter @clawwork/openclaw-adapter start` with `OPENCLAW_GATEWAY_URL` pointed at the real Gateway
+5. Set `OPENCLAW_ADAPTER_URL=http://127.0.0.1:3002` before starting `mobile-api`
 
 ## Service Commands
 
+- `pnpm --filter @clawwork/openclaw-adapter start`
+- `pnpm --filter @clawwork/mobile-api start`
 - `pnpm --filter @clawwork/mobile-api test`
 - `pnpm --filter @clawwork/task-router test`
 - `pnpm --filter @clawwork/openclaw-adapter test`

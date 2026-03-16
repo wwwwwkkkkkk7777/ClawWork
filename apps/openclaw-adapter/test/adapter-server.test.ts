@@ -1,0 +1,209 @@
+import { afterEach, describe, expect, it } from "vitest";
+import { WebSocketServer } from "ws";
+import { createAdapterServer } from "../src/server";
+
+type TaskStreamEvent = {
+  type: string;
+  taskId: string;
+  sessionId: string;
+  runId: string;
+  timestamp: string;
+  delta?: string;
+};
+
+async function collectTaskEvents(url: string, expectedCount: number) {
+  const response = await fetch(url, {
+    headers: {
+      Accept: "text/event-stream"
+    }
+  });
+
+  if (!response.body) {
+    throw new Error("missing response body");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const events: TaskStreamEvent[] = [];
+  let buffer = "";
+
+  while (events.length < expectedCount) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+
+    while (buffer.includes("\n\n")) {
+      const separatorIndex = buffer.indexOf("\n\n");
+      const rawEvent = buffer.slice(0, separatorIndex);
+      buffer = buffer.slice(separatorIndex + 2);
+
+      const dataLine = rawEvent
+        .split("\n")
+        .find((line) => line.startsWith("data: "));
+
+      if (!dataLine) {
+        continue;
+      }
+
+      events.push(JSON.parse(dataLine.slice(6)) as TaskStreamEvent);
+    }
+  }
+
+  reader.releaseLock();
+  return events;
+}
+
+let gatewayServer: WebSocketServer | undefined;
+let adapterServer:
+  | {
+      url: string;
+      close: () => Promise<void>;
+    }
+  | undefined;
+
+afterEach(async () => {
+  gatewayServer?.close();
+  gatewayServer = undefined;
+
+  if (adapterServer) {
+    await adapterServer.close();
+    adapterServer = undefined;
+  }
+});
+
+describe("openclaw adapter server", () => {
+  it("executes chat.send through gateway and streams mapped task events", async () => {
+    let capturedChatSendParams: Record<string, unknown> | undefined;
+
+    gatewayServer = new WebSocketServer({ port: 18792 });
+    gatewayServer.on("connection", (socket) => {
+      socket.send(
+        JSON.stringify({
+          type: "event",
+          event: "connect.challenge",
+          payload: { nonce: "nonce-1" }
+        })
+      );
+
+      socket.on("message", (raw) => {
+        const frame = JSON.parse(raw.toString()) as {
+          id: string;
+          method: string;
+          params: Record<string, unknown>;
+        };
+
+        if (frame.method === "connect") {
+          socket.send(
+            JSON.stringify({
+              type: "res",
+              id: frame.id,
+              ok: true,
+              payload: {
+                snapshot: {
+                  sessionDefaults: {
+                    mainSessionKey: "main"
+                  }
+                }
+              }
+            })
+          );
+          return;
+        }
+
+        if (frame.method === "chat.send") {
+          capturedChatSendParams = frame.params;
+
+          socket.send(
+            JSON.stringify({
+              type: "res",
+              id: frame.id,
+              ok: true,
+              payload: {
+                runId: "run_1",
+                status: "accepted"
+              }
+            })
+          );
+
+          setTimeout(() => {
+            socket.send(
+              JSON.stringify({
+                type: "event",
+                event: "agent",
+                payload: {
+                  runId: "run_1",
+                  stream: "assistant",
+                  ts: Date.now(),
+                  data: {
+                    text: "draft line",
+                    sessionKey: "main"
+                  }
+                }
+              })
+            );
+          }, 10);
+
+          setTimeout(() => {
+            socket.send(
+              JSON.stringify({
+                type: "event",
+                event: "chat",
+                payload: {
+                  runId: "run_1",
+                  sessionKey: "main",
+                  state: "final"
+                }
+              })
+            );
+          }, 20);
+        }
+      });
+    });
+
+    adapterServer = await createAdapterServer({
+      gatewayUrl: "ws://127.0.0.1:18792"
+    });
+
+    const executeResponse = await fetch(`${adapterServer.url}/gateway/tasks/execute`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        taskId: "task-1",
+        sessionId: "session-1",
+        message: "hello"
+      })
+    });
+
+    expect(executeResponse.status).toBe(202);
+
+    const accepted = (await executeResponse.json()) as {
+      taskId: string;
+      sessionId: string;
+      runId: string;
+      sessionKey: string;
+      streamUrl: string;
+    };
+
+    expect(accepted.runId).toBe("run_1");
+    expect(accepted.sessionKey).toBe("main");
+
+    const streamedEvents = await collectTaskEvents(
+      `${adapterServer.url}/gateway/tasks/task-1/events`,
+      3
+    );
+
+    expect(streamedEvents.map((event) => event.type)).toEqual([
+      "task.accepted",
+      "task.delta",
+      "task.completed"
+    ]);
+    expect(streamedEvents[1]?.delta).toBe("draft line");
+    expect(capturedChatSendParams?.sessionKey).toBe("main");
+    expect(capturedChatSendParams?.idempotencyKey).toBe("task-1");
+  });
+});
