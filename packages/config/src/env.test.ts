@@ -10,7 +10,7 @@ describe("parseEnv", () => {
     expect(
       parseEnv({
         NODE_ENV: "development",
-        DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/clawwork",
+        DATABASE_URL: "postgresql://postgres:postgres@localhost:55432/clawwork?schema=public",
         REDIS_URL: "redis://localhost:6379",
         MINIO_ENDPOINT: "http://localhost:9000",
         OPENCLAW_GATEWAY_URL: "ws://127.0.0.1:18789"
