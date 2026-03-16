@@ -1,6 +1,26 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { createAdapterServer } from "./server";
 
+function loadWorkspaceEnv() {
+  const candidates = [
+    resolve(process.cwd(), ".env"),
+    resolve(process.cwd(), "..", ".env"),
+    resolve(process.cwd(), "..", "..", ".env")
+  ];
+
+  for (const envPath of candidates) {
+    if (!existsSync(envPath)) {
+      continue;
+    }
+
+    process.loadEnvFile(envPath);
+    return;
+  }
+}
+
 async function bootstrap() {
+  loadWorkspaceEnv();
   const gatewayUrl = process.env.OPENCLAW_GATEWAY_URL;
   if (!gatewayUrl) {
     throw new Error("OPENCLAW_GATEWAY_URL is required");

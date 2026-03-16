@@ -1,0 +1,8 @@
+
+> @clawwork/openclaw-adapter@0.0.0 start D:\Desktop\ClawWork\.worktrees\clawwork-foundation\apps\openclaw-adapter
+> tsx src/main.ts
+
+openclaw-adapter listening on http://127.0.0.1:3002
+D:\Desktop\ClawWork\.worktrees\clawwork-foundation\apps\openclaw-adapter:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @clawwork/openclaw-adapter@0.0.0 start: `tsx src/main.ts`
+Exit status 1

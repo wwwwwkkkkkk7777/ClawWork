@@ -68,8 +68,12 @@ export async function createAdapterServer(options: AdapterServerOptions) {
           streamUrl: `/gateway/tasks/${payload.taskId}/events`
         });
       } catch (error) {
+        const typedError =
+          error instanceof Error && "code" in error
+            ? (error as Error & { code: string })
+            : undefined;
         writeJson(response, 502, {
-          code: "GATEWAY_UNAVAILABLE",
+          code: typedError?.code ?? "GATEWAY_UNAVAILABLE",
           message: error instanceof Error ? error.message : "gateway request failed"
         });
       }
