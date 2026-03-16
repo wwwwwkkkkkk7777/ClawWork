@@ -1,15 +1,20 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
-import { HomeScreen } from "../screens/HomeScreen";
+import { RootNavigator } from "../navigation/RootNavigator";
+import { routeStore } from "../navigation/routeStore";
+import { taskStore } from "../store/taskStore";
 
 describe("mobile task flow", () => {
-  it("shows the task input and submit action", () => {
-    render(<HomeScreen />);
+  it("starts from home and enters conversation after send", () => {
+    routeStore.reset();
+    taskStore.reset();
+    render(<RootNavigator />);
 
     fireEvent.changeText(
-      screen.getByPlaceholderText("告诉我你想交给我的任务"),
-      "写一封客户跟进邮件"
+      screen.getByPlaceholderText("发送消息或按住说话…"),
+      "帮我整理会议纪要"
     );
+    fireEvent.press(screen.getByLabelText("send message"));
 
-    expect(screen.getByText("发送")).toBeTruthy();
+    expect(screen.getAllByText("帮我整理会议纪要")).toHaveLength(2);
   });
 });

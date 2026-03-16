@@ -1,15 +1,14 @@
 # Mobile App
 
-The mobile app is an Expo shell aligned with the ClawWork task-first IA:
+The mobile app now uses a home-led, Doubao-inspired shell:
 
-- `HomeScreen`: task entry
-- `ConversationScreen`: streaming draft state
-- `ResultScreen`: structured result card
-- `HistoryScreen`: task history summary
-- `SettingsScreen`: environment and preferences placeholder
+- `HomeScreen`: primary entry for quick chips, capability cards, recent conversations, and the floating input bar
+- `ConversationScreen`: the main working surface with user bubbles, assistant cards, tool chips, and follow-up input
+- `HistoryScreen`: lightweight recent archive
+- `SettingsScreen`: grouped assistant-style preferences
 
 ## Commands
 
-- `pnpm --filter @clawwork/mobile start`
+- `pnpm --filter @clawwork/mobile start -- --clear`
 - `pnpm --filter @clawwork/mobile test`
 - `pnpm --filter @clawwork/mobile lint`

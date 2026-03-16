@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from "react-native";
+import { tokens } from "../theme/tokens";
 
 export function ResultCard(props: { title: string; content: string }) {
   return (
@@ -11,21 +12,21 @@ export function ResultCard(props: { title: string; content: string }) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#fff",
-    borderRadius: 20,
+    backgroundColor: tokens.colors.surface,
+    borderRadius: tokens.radius.card,
     padding: 20,
     gap: 8,
     borderWidth: 1,
-    borderColor: "#e7e5e4"
+    borderColor: tokens.colors.border
   },
   title: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#1c1917"
+    color: tokens.colors.text
   },
   content: {
     fontSize: 15,
     lineHeight: 22,
-    color: "#44403c"
+    color: tokens.colors.textSecondary
   }
 });

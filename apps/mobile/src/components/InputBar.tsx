@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { tokens } from "../theme/tokens";
 
 export function InputBar(props: {
   value: string;
@@ -8,42 +9,79 @@ export function InputBar(props: {
   return (
     <View style={styles.wrapper}>
       <TextInput
-        placeholder="告诉我你想交给我的任务"
+        placeholder="发送消息或按住说话…"
+        placeholderTextColor={tokens.colors.textMuted}
         value={props.value}
         onChangeText={props.onChangeText}
         style={styles.input}
       />
-      <Pressable onPress={props.onSend} style={styles.button}>
-        <Text style={styles.buttonText}>发送</Text>
-      </Pressable>
+      <View style={styles.actions}>
+        <Pressable accessibilityLabel="voice placeholder" style={styles.iconButton}>
+          <Text style={styles.iconText}>◉</Text>
+        </Pressable>
+        <Pressable accessibilityLabel="more actions" style={styles.iconButton}>
+          <Text style={styles.iconText}>＋</Text>
+        </Pressable>
+        <Pressable
+          accessibilityLabel="send message"
+          onPress={props.onSend}
+          style={styles.sendButton}
+        >
+          <Text style={styles.sendText}>↑</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrapper: {
-    gap: 12,
-    marginTop: 20
+    borderRadius: tokens.radius.cardLg,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: tokens.colors.surface,
+    shadowColor: "#0f172a",
+    shadowOpacity: 0.08,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 3
   },
   input: {
     minHeight: 52,
-    borderWidth: 1,
-    borderColor: "#d6d3d1",
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "#fff"
+    fontSize: 18,
+    color: tokens.colors.text
   },
-  button: {
-    alignSelf: "flex-start",
-    backgroundColor: "#0f766e",
-    borderRadius: 999,
-    paddingHorizontal: 18,
-    paddingVertical: 10
+  actions: {
+    marginTop: 10,
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    gap: 10
   },
-  buttonText: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "700"
+  iconButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 2,
+    borderColor: tokens.colors.text,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  iconText: {
+    fontSize: 18,
+    color: tokens.colors.text
+  },
+  sendButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: tokens.colors.accent,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  sendText: {
+    fontSize: 20,
+    color: "#ffffff",
+    fontWeight: "800"
   }
 });

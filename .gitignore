@@ -6,3 +6,5 @@ coverage/
 .env
 .env.*
 !.env.example
+apps/mobile/.expo/
+apps/mobile/.expo-export-check/
