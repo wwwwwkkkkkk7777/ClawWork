@@ -1,9 +1,12 @@
+import type { TaskStreamEvent } from "../services/stream";
+
 type Listener = () => void;
 
 export type ConversationMessage = {
   id: string;
   role: "user" | "assistant";
   text: string;
+  runId?: string;
 };
 
 export type RecentConversation = {
@@ -23,6 +26,7 @@ type TaskState = {
   currentStatus: string | null;
   currentError: string | null;
   currentTitle: string;
+  currentRunId: string | null;
   messages: ConversationMessage[];
   recentConversations: RecentConversation[];
 };
@@ -38,6 +42,7 @@ const initialState: TaskState = {
   currentStatus: null,
   currentError: null,
   currentTitle: "新对话",
+  currentRunId: null,
   messages: [
     {
       id: "welcome-assistant",
@@ -97,7 +102,7 @@ function buildTitle(text: string) {
   return trimmed.length > 10 ? `${trimmed.slice(0, 10)}…` : trimmed;
 }
 
-function buildAssistantReply(text: string) {
+function buildAssistantPreview(text: string) {
   if (text.includes("你好")) {
     return "你好呀！很高兴认识你😊";
   }
@@ -140,6 +145,39 @@ function upsertRecent(prompt: string, status: string) {
   state.recentConversations.unshift(nextItem);
 }
 
+function pushUserMessage(prompt: string) {
+  state.messages = [
+    ...state.messages,
+    {
+      id: nextId("user"),
+      role: "user",
+      text: prompt
+    }
+  ];
+}
+
+function appendAssistantDelta(runId: string, delta: string) {
+  if (!delta) {
+    return;
+  }
+
+  const lastMessage = state.messages[state.messages.length - 1];
+  if (lastMessage?.role === "assistant" && lastMessage.runId === runId) {
+    lastMessage.text += delta;
+    return;
+  }
+
+  state.messages = [
+    ...state.messages,
+    {
+      id: nextId("assistant"),
+      role: "assistant",
+      text: delta,
+      runId
+    }
+  ];
+}
+
 export const taskStore = {
   getSnapshot() {
     return snapshot;
@@ -166,16 +204,12 @@ export const taskStore = {
     state.currentStatus = "queued";
     state.currentError = null;
     state.currentTitle = buildTitle(prompt);
+    state.currentRunId = null;
     state.messages = [
       {
         id: nextId("user"),
         role: "user",
         text: prompt
-      },
-      {
-        id: nextId("assistant"),
-        role: "assistant",
-        text: buildAssistantReply(prompt)
       }
     ];
     upsertRecent(prompt, "处理中");
@@ -190,27 +224,21 @@ export const taskStore = {
     state.lastSubmittedTaskText = prompt;
     state.submitCount += 1;
     state.draft = "";
-    state.messages = [
-      ...state.messages,
-      {
-        id: nextId("user"),
-        role: "user",
-        text: prompt
-      },
-      {
-        id: nextId("assistant"),
-        role: "assistant",
-        text: buildAssistantReply(prompt)
-      }
-    ];
-    upsertRecent(prompt, state.currentStatus ?? "处理中");
+    state.currentStatus = "queued";
+    state.currentError = null;
+    state.currentRunId = null;
+    pushUserMessage(prompt);
+    upsertRecent(prompt, "处理中");
     emit();
   },
   resumeConversation(item: RecentConversation) {
-    state.currentTitle = item.title;
-    state.lastSubmittedTaskText = item.prompt;
+    state.currentTaskId = null;
+    state.currentSessionId = null;
     state.currentStatus = item.status;
     state.currentError = null;
+    state.currentTitle = item.title;
+    state.currentRunId = null;
+    state.lastSubmittedTaskText = item.prompt;
     state.messages = [
       {
         id: nextId("user"),
@@ -220,7 +248,7 @@ export const taskStore = {
       {
         id: nextId("assistant"),
         role: "assistant",
-        text: buildAssistantReply(item.prompt)
+        text: buildAssistantPreview(item.prompt)
       }
     ];
     emit();
@@ -235,6 +263,49 @@ export const taskStore = {
     state.currentStatus = input.initialStatus;
     if (state.recentConversations[0]) {
       state.recentConversations[0].status = input.initialStatus;
+    }
+    emit();
+  },
+  applyStreamEvent(event: TaskStreamEvent) {
+    state.currentTaskId = event.taskId;
+    state.currentSessionId = event.sessionId;
+    state.currentRunId = event.runId;
+
+    if (event.type === "task.accepted") {
+      state.currentStatus = "running";
+      if (state.recentConversations[0]) {
+        state.recentConversations[0].status = "处理中";
+      }
+      emit();
+      return;
+    }
+
+    if (event.type === "task.stage.changed" || event.type === "task.result.created") {
+      state.currentStatus = "running";
+      emit();
+      return;
+    }
+
+    if (event.type === "task.delta") {
+      state.currentStatus = "running";
+      appendAssistantDelta(event.runId, event.delta);
+      emit();
+      return;
+    }
+
+    if (event.type === "task.completed") {
+      state.currentStatus = "completed";
+      if (state.recentConversations[0]) {
+        state.recentConversations[0].status = "已完成";
+      }
+      emit();
+      return;
+    }
+
+    state.currentStatus = "failed";
+    state.currentError = event.message;
+    if (state.recentConversations[0]) {
+      state.recentConversations[0].status = "失败";
     }
     emit();
   },
@@ -263,6 +334,7 @@ export const taskStore = {
     state.currentStatus = initialState.currentStatus;
     state.currentError = initialState.currentError;
     state.currentTitle = initialState.currentTitle;
+    state.currentRunId = initialState.currentRunId;
     state.messages = [...initialState.messages];
     state.recentConversations = [...initialState.recentConversations];
     emit();

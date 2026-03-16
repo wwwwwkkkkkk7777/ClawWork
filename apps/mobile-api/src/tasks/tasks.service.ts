@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { BadGatewayException, Injectable } from "@nestjs/common";
+import {
+  BadGatewayException,
+  Injectable,
+  NotFoundException
+} from "@nestjs/common";
 import type { TaskStreamEvent } from "@clawwork/shared-types";
 
 type CreateTaskInput = {
@@ -11,9 +15,17 @@ type CreateTaskInput = {
   preferredLength: string;
 };
 
+type CreateTaskResult = {
+  taskId: string;
+  sessionId: string;
+  streamUrl: string;
+  initialStatus: string;
+};
+
 type TaskRecord = {
   taskId: string;
   sessionId: string;
+  parentTaskId?: string;
   input: CreateTaskInput["input"];
   preferredTone: string;
   preferredLength: string;
@@ -34,35 +46,23 @@ export class TasksService {
   private readonly tasks = new Map<string, TaskRecord>();
   private readonly files = new Map<string, FileRecord>();
 
-  async createTask(input: CreateTaskInput) {
-    const taskId = randomUUID();
-    const sessionId = randomUUID();
-    const task: TaskRecord = {
-      taskId,
-      sessionId,
-      input: input.input,
-      preferredTone: input.preferredTone,
-      preferredLength: input.preferredLength,
-      status: "queued",
-      createdAt: new Date().toISOString()
-    };
+  async createTask(input: CreateTaskInput): Promise<CreateTaskResult> {
+    return this.enqueueTask(input);
+  }
 
-    this.tasks.set(taskId, task);
-
-    const adapterUrl = process.env.OPENCLAW_ADAPTER_URL;
-    if (adapterUrl) {
-      const accepted = await this.requestGatewayExecution(adapterUrl, task);
-      task.runId = accepted.runId;
-      task.adapterStreamUrl = accepted.streamUrl;
-      task.status = "running";
+  async createFollowUp(
+    taskId: string,
+    input: CreateTaskInput
+  ): Promise<CreateTaskResult> {
+    const parentTask = this.tasks.get(taskId);
+    if (!parentTask) {
+      throw new NotFoundException("task not found");
     }
 
-    return {
-      taskId,
-      sessionId,
-      streamUrl: `/tasks/${taskId}/stream`,
-      initialStatus: task.status
-    };
+    return this.enqueueTask(input, {
+      sessionId: parentTask.sessionId,
+      parentTaskId: parentTask.taskId
+    });
   }
 
   getTask(taskId: string) {
@@ -132,6 +132,41 @@ export class TasksService {
     if (event.type === "task.failed") {
       task.status = "failed";
     }
+  }
+
+  private async enqueueTask(
+    input: CreateTaskInput,
+    options?: { sessionId?: string; parentTaskId?: string }
+  ): Promise<CreateTaskResult> {
+    const taskId = randomUUID();
+    const sessionId = options?.sessionId ?? randomUUID();
+    const task: TaskRecord = {
+      taskId,
+      sessionId,
+      parentTaskId: options?.parentTaskId,
+      input: input.input,
+      preferredTone: input.preferredTone,
+      preferredLength: input.preferredLength,
+      status: "queued",
+      createdAt: new Date().toISOString()
+    };
+
+    this.tasks.set(taskId, task);
+
+    const adapterUrl = process.env.OPENCLAW_ADAPTER_URL;
+    if (adapterUrl) {
+      const accepted = await this.requestGatewayExecution(adapterUrl, task);
+      task.runId = accepted.runId;
+      task.adapterStreamUrl = accepted.streamUrl;
+      task.status = "running";
+    }
+
+    return {
+      taskId,
+      sessionId,
+      streamUrl: `/tasks/${taskId}/stream`,
+      initialStatus: task.status
+    };
   }
 
   private async requestGatewayExecution(adapterUrl: string, task: TaskRecord) {
