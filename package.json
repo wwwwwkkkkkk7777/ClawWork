@@ -1,0 +1,19 @@
+{
+  "name": "clawwork",
+  "private": true,
+  "packageManager": "pnpm@10.25.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "check:workspace": "node scripts/check-workspace.mjs",
+    "compose:check": "powershell -NoProfile -File scripts/check-compose.ps1",
+    "compose:up": "docker compose -f infra/compose/docker-compose.yml up -d",
+    "compose:down": "docker compose -f infra/compose/docker-compose.yml down -v"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.8"
+  }
+}
