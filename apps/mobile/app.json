@@ -3,6 +3,7 @@
     "name": "ClawWork",
     "slug": "clawwork",
     "version": "1.0.0",
-    "orientation": "portrait"
+    "orientation": "portrait",
+    "platforms": ["ios", "android"]
   }
 }
