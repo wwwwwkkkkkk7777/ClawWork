@@ -1,5 +1,5 @@
 import { useState, useSyncExternalStore } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { SafeAreaView, ScrollView, StyleSheet, View } from "react-native";
 import { AssistantMessageCard } from "../components/AssistantMessageCard";
 import { ConversationHeader } from "../components/ConversationHeader";
 import { InputBar } from "../components/InputBar";
@@ -25,7 +25,7 @@ export function ConversationScreen() {
       : "新对话";
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <ConversationHeader
         title={title}
         subtitle="内容由 AI 生成"
@@ -63,28 +63,28 @@ export function ConversationScreen() {
           setDraft("");
         }}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 18,
-    gap: 14,
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 10,
+    gap: 10,
     backgroundColor: tokens.colors.canvas
   },
   stream: {
     flex: 1
   },
   streamContent: {
-    paddingTop: 8,
-    paddingBottom: 8
+    paddingTop: 4,
+    paddingBottom: 6
   },
   toolRow: {
-    gap: 10,
-    paddingVertical: 4
+    gap: 8,
+    paddingVertical: 2
   }
 });

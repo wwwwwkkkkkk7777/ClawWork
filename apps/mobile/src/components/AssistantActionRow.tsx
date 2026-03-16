@@ -19,17 +19,17 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10
+    gap: 8
   },
   action: {
-    minWidth: 50,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 16,
+    minWidth: 42,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 13,
     backgroundColor: tokens.colors.accentSoft
   },
   actionText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
     color: tokens.colors.accent
   }

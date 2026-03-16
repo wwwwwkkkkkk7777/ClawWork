@@ -19,14 +19,16 @@ export function ConversationHeader(props: {
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>AI</Text>
         </View>
-        <View>
-          <Text style={styles.title}>{props.title}</Text>
+        <View style={styles.meta}>
+          <Text numberOfLines={1} style={styles.title}>
+            {props.title}
+          </Text>
           <Text style={styles.subtitle}>{props.subtitle}</Text>
         </View>
       </View>
-      <View style={styles.moreButton}>
+      <Pressable style={styles.moreButton}>
         <Text style={styles.moreText}>⋯</Text>
-      </View>
+      </Pressable>
     </View>
   );
 }
@@ -36,53 +38,60 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    gap: 12
+    gap: 10
   },
   leftGroup: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12
+    gap: 10
   },
   backButton: {
-    width: 36,
-    height: 36,
+    width: 30,
+    height: 30,
     alignItems: "center",
     justifyContent: "center"
   },
   backText: {
-    fontSize: 34,
-    lineHeight: 34,
+    fontSize: 28,
+    lineHeight: 28,
     color: tokens.colors.text
   },
   avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: "#f5ee85",
     alignItems: "center",
     justifyContent: "center"
   },
   avatarText: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: "800",
     color: tokens.colors.text
   },
+  meta: {
+    flex: 1
+  },
   title: {
-    fontSize: 26,
+    fontSize: 18,
     fontWeight: "800",
     color: tokens.colors.text
   },
   subtitle: {
-    marginTop: 2,
-    fontSize: 13,
+    marginTop: 1,
+    fontSize: 11,
     color: tokens.colors.textMuted
   },
   moreButton: {
-    width: 36,
-    alignItems: "center"
+    width: 30,
+    height: 30,
+    alignItems: "center",
+    justifyContent: "center"
   },
   moreText: {
-    fontSize: 24,
+    fontSize: 22,
+    lineHeight: 22,
     color: tokens.colors.text
   }
 });
