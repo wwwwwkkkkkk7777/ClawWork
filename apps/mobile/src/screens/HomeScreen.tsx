@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import {
   Pressable,
+  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -76,16 +77,13 @@ export function HomeScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.topBar}>
-          <View>
-            <Text style={styles.brand}>ClawWork</Text>
-            <Text style={styles.title}>今天想让我帮你做什么？</Text>
-          </View>
+          <Text style={styles.brand}>ClawWork</Text>
           <View style={styles.topActions}>
             <Pressable
               accessibilityLabel="open history"
@@ -103,6 +101,8 @@ export function HomeScreen() {
             </Pressable>
           </View>
         </View>
+
+        <Text style={styles.title}>今天想让我帮你做什么？</Text>
 
         <Text style={styles.description}>
           总结文档、会议纪要、邮件草稿和工作汇报，都可以先交给我起一版。
@@ -168,7 +168,7 @@ export function HomeScreen() {
           onSend={() => beginConversation(taskState.draft)}
         />
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -178,73 +178,73 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.colors.canvas
   },
   content: {
-    paddingHorizontal: tokens.spacing.lg,
-    paddingTop: 24,
-    paddingBottom: 180,
-    gap: tokens.spacing.lg
+    paddingHorizontal: 18,
+    paddingTop: 8,
+    paddingBottom: 144,
+    gap: 14
   },
   topBar: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 16
+    alignItems: "center",
+    gap: 12
   },
   topActions: {
     flexDirection: "row",
-    gap: 8
+    gap: 6
   },
   topActionButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: tokens.colors.surface,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#0f172a",
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
     elevation: 2
   },
   topActionText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "800",
     color: tokens.colors.text
   },
   brand: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
-    color: tokens.colors.textMuted,
-    marginBottom: 8
+    letterSpacing: 0.6,
+    color: tokens.colors.textMuted
   },
   title: {
-    fontSize: tokens.type.title,
-    lineHeight: 38,
+    fontSize: 24,
+    lineHeight: 31,
     fontWeight: "800",
     color: tokens.colors.text
   },
   description: {
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 14,
+    lineHeight: 22,
     color: tokens.colors.textSecondary
   },
   quickRow: {
-    gap: 10,
-    paddingVertical: 4
+    gap: 8,
+    paddingVertical: 2
   },
   sectionCard: {
     borderRadius: tokens.radius.card,
-    padding: 16,
+    padding: 14,
     backgroundColor: tokens.colors.surface,
     shadowColor: "#0f172a",
-    shadowOpacity: 0.06,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.05,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
     elevation: 2,
-    gap: 12
+    gap: 10
   },
   sectionLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800",
     color: tokens.colors.textMuted
   },
@@ -259,17 +259,17 @@ const styles = StyleSheet.create({
     alignItems: "center"
   },
   viewAll: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
     color: tokens.colors.accent
   },
   recentList: {
-    gap: 10
+    gap: 8
   },
   inputDock: {
     position: "absolute",
-    left: 20,
-    right: 20,
-    bottom: 18
+    left: 16,
+    right: 16,
+    bottom: 10
   }
 });

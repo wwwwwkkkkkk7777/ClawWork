@@ -11,8 +11,8 @@ export function QuickChip(props: { label: string; onPress?: () => void }) {
 
 const styles = StyleSheet.create({
   chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 11,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
     borderRadius: tokens.radius.chip,
     backgroundColor: tokens.colors.surface,
     shadowColor: "#0f172a",
@@ -22,7 +22,7 @@ const styles = StyleSheet.create({
     elevation: 2
   },
   label: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "800",
     color: tokens.colors.text
   }

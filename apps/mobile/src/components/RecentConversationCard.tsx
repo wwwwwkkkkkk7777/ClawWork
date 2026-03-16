@@ -21,11 +21,11 @@ export function RecentConversationCard(props: {
 const styles = StyleSheet.create({
   card: {
     borderRadius: 20,
-    padding: 16,
+    padding: 14,
     backgroundColor: tokens.colors.surface,
     shadowColor: "#0f172a",
-    shadowOpacity: 0.06,
-    shadowRadius: 18,
+    shadowOpacity: 0.05,
+    shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
     elevation: 2,
     gap: 6
@@ -38,17 +38,17 @@ const styles = StyleSheet.create({
   },
   title: {
     flex: 1,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "800",
     color: tokens.colors.text
   },
   status: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
     color: tokens.colors.accent
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: 12,
     color: tokens.colors.textMuted
   }
 });

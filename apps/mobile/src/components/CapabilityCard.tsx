@@ -21,35 +21,35 @@ export function CapabilityCard(props: {
 const styles = StyleSheet.create({
   card: {
     flexBasis: "48%",
-    minHeight: 132,
+    minHeight: 108,
     borderRadius: tokens.radius.card,
-    padding: 16,
+    padding: 14,
     backgroundColor: tokens.colors.surfaceMuted,
     borderWidth: 1,
     borderColor: tokens.colors.border,
-    gap: 10
+    gap: 8
   },
   badge: {
     alignSelf: "flex-start",
-    minWidth: 34,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    minWidth: 32,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
     borderRadius: tokens.radius.round,
     backgroundColor: tokens.colors.accentSoft
   },
   badgeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "800",
     color: tokens.colors.accent
   },
   title: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "800",
     color: tokens.colors.text
   },
   description: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 17,
     color: tokens.colors.textSecondary
   }
 });

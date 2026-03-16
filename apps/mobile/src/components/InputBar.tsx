@@ -36,9 +36,12 @@ export function InputBar(props: {
 
 const styles = StyleSheet.create({
   wrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
     borderRadius: tokens.radius.cardLg,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     backgroundColor: tokens.colors.surface,
     shadowColor: "#0f172a",
     shadowOpacity: 0.08,
@@ -47,40 +50,39 @@ const styles = StyleSheet.create({
     elevation: 3
   },
   input: {
-    minHeight: 52,
-    fontSize: 18,
+    flex: 1,
+    minHeight: 24,
+    fontSize: 16,
     color: tokens.colors.text
   },
   actions: {
-    marginTop: 10,
     flexDirection: "row",
-    justifyContent: "flex-end",
     alignItems: "center",
-    gap: 10
+    gap: 8
   },
   iconButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 2,
     borderColor: tokens.colors.text,
     alignItems: "center",
     justifyContent: "center"
   },
   iconText: {
-    fontSize: 18,
+    fontSize: 15,
     color: tokens.colors.text
   },
   sendButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: tokens.colors.accent,
     alignItems: "center",
     justifyContent: "center"
   },
   sendText: {
-    fontSize: 20,
+    fontSize: 17,
     color: "#ffffff",
     fontWeight: "800"
   }
