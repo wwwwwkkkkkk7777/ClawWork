@@ -92,6 +92,7 @@ const styles = StyleSheet.create({
     paddingBottom: 6
   },
   toolRow: {
+    alignItems: "center",
     gap: 8,
     paddingVertical: 2
   }

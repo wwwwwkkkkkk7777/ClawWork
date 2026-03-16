@@ -12,7 +12,6 @@ import {
 import { CapabilityCard } from "../components/CapabilityCard";
 import { InputBar } from "../components/InputBar";
 import { QuickChip } from "../components/QuickChip";
-import { RecentConversationCard } from "../components/RecentConversationCard";
 import { routeStore } from "../navigation/routeStore";
 import { createTask } from "../services/tasks";
 import { taskStore } from "../store/taskStore";
@@ -140,29 +139,6 @@ export function HomeScreen() {
             ))}
           </View>
         </View>
-
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionLabel}>最近对话</Text>
-            <Pressable onPress={() => routeStore.navigate("history")}>
-              <Text style={styles.viewAll}>查看全部</Text>
-            </Pressable>
-          </View>
-          <View style={styles.recentList}>
-            {taskState.recentConversations.slice(0, 3).map((item) => (
-              <RecentConversationCard
-                key={item.id}
-                title={item.title}
-                subtitle={item.subtitle}
-                status={item.status}
-                onPress={() => {
-                  taskStore.resumeConversation(item);
-                  routeStore.navigate("conversation");
-                }}
-              />
-            ))}
-          </View>
-        </View>
       </ScrollView>
 
       <View style={styles.inputDock}>
@@ -232,6 +208,7 @@ const styles = StyleSheet.create({
     color: tokens.colors.textSecondary
   },
   quickRow: {
+    alignItems: "center",
     gap: 8,
     paddingVertical: 2
   },
@@ -255,19 +232,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center"
-  },
-  viewAll: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: tokens.colors.accent
-  },
-  recentList: {
-    gap: 8
   },
   inputDock: {
     position: "absolute",
