@@ -11,8 +11,10 @@ import {
 } from "react-native";
 import { CapabilityCard } from "../components/CapabilityCard";
 import { InputBar } from "../components/InputBar";
+import { PendingFileCard } from "../components/PendingFileCard";
 import { QuickChip } from "../components/QuickChip";
 import { routeStore } from "../navigation/routeStore";
+import { pickAttachments, uploadAttachment } from "../services/files";
 import { createTask } from "../services/tasks";
 import { taskStore } from "../store/taskStore";
 import { tokens } from "../theme/tokens";
@@ -40,7 +42,7 @@ const capabilities = [
   },
   {
     title: "日报周报",
-    description: "按更清楚的结构，先起一版工作总结。",
+    description: "按更清晰的结构，先起一版工作总结。",
     prompt: "帮我写一份周报",
     badge: "汇报"
   }
@@ -55,19 +57,40 @@ export function HomeScreen() {
     taskStore.getSnapshot
   );
 
+  const attachFiles = async () => {
+    const pickedFiles = await pickAttachments();
+
+    for (const pickedFile of pickedFiles) {
+      const clientId = taskStore.beginPendingAttachment({
+        filename: pickedFile.filename,
+        mimeType: pickedFile.mimeType,
+        sizeBytes: pickedFile.sizeBytes
+      });
+
+      try {
+        const uploadedFile = await uploadAttachment(pickedFile);
+        taskStore.completePendingAttachment(clientId, uploadedFile);
+      } catch (error: unknown) {
+        taskStore.failPendingAttachment(
+          clientId,
+          error instanceof Error ? error.message : "上传失败"
+        );
+      }
+    }
+  };
+
   const beginConversation = (prompt: string) => {
     const text = prompt.trim();
     if (!text) {
       return;
     }
 
+    const fileIds = taskStore.getUploadedPendingFileIds();
     taskStore.startConversation(text);
     routeStore.navigate("conversation");
 
     void createTask({
-      input: { text, fileIds: [] },
-      preferredTone: "default",
-      preferredLength: "medium"
+      input: { text, fileIds }
     })
       .then((result) => {
         taskStore.setExecutionMeta(result);
@@ -117,11 +140,7 @@ export function HomeScreen() {
           contentContainerStyle={styles.quickRow}
         >
           {quickActions.map((label) => (
-            <QuickChip
-              key={label}
-              label={label}
-              onPress={() => beginConversation(label)}
-            />
+            <QuickChip key={label} label={label} onPress={() => beginConversation(label)} />
           ))}
         </ScrollView>
 
@@ -142,10 +161,25 @@ export function HomeScreen() {
       </ScrollView>
 
       <View style={styles.inputDock}>
+        {taskState.pendingAttachments.length > 0 ? (
+          <View style={styles.pendingList}>
+            {taskState.pendingAttachments.map((attachment) => (
+              <PendingFileCard
+                key={attachment.clientId}
+                attachment={attachment}
+                onRemove={() => taskStore.removePendingAttachment(attachment.clientId)}
+              />
+            ))}
+          </View>
+        ) : null}
+
         <InputBar
           value={taskState.draft}
           onChangeText={taskStore.setDraft}
           onSend={() => beginConversation(taskState.draft)}
+          onAttach={() => {
+            void attachFiles();
+          }}
         />
       </View>
     </SafeAreaView>
@@ -159,7 +193,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 18,
-    paddingBottom: 144,
+    paddingBottom: 168,
     gap: 14
   },
   topBar: {
@@ -237,6 +271,10 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 16,
     right: 16,
-    bottom: 10
+    bottom: 10,
+    gap: 8
+  },
+  pendingList: {
+    gap: 8
   }
 });

@@ -1,19 +1,21 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { tokens } from "../theme/tokens";
 
 export function SettingsGroupCard(props: {
-  rows: Array<{ label: string; value: string }>;
+  rows: Array<{ label: string; value: string; onPress?: () => void }>;
 }) {
   return (
     <View style={styles.card}>
       {props.rows.map((row, index) => (
-        <View
+        <Pressable
           key={row.label}
           style={[styles.row, index < props.rows.length - 1 ? styles.rowBorder : null]}
+          onPress={row.onPress}
+          disabled={!row.onPress}
         >
           <Text style={styles.label}>{row.label}</Text>
           <Text style={styles.value}>{row.value}</Text>
-        </View>
+        </Pressable>
       ))}
     </View>
   );

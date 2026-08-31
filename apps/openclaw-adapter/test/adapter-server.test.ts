@@ -1,3 +1,5 @@
+import { createServer, type Server } from "node:http";
+import { type AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocketServer } from "ws";
 import { createAdapterServer } from "../src/server";
@@ -9,12 +11,14 @@ type TaskStreamEvent = {
   runId: string;
   timestamp: string;
   delta?: string;
+  code?: string;
 };
 
-async function collectTaskEvents(url: string, expectedCount: number) {
+async function collectTaskEvents(url: string, expectedCount: number, lastEventId?: number) {
   const response = await fetch(url, {
     headers: {
-      Accept: "text/event-stream"
+      Accept: "text/event-stream",
+      ...(lastEventId ? { "Last-Event-ID": String(lastEventId) } : {})
     }
   });
 
@@ -24,7 +28,7 @@ async function collectTaskEvents(url: string, expectedCount: number) {
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
-  const events: TaskStreamEvent[] = [];
+  const events: Array<{ id: number; event: TaskStreamEvent }> = [];
   let buffer = "";
 
   while (events.length < expectedCount) {
@@ -40,15 +44,18 @@ async function collectTaskEvents(url: string, expectedCount: number) {
       const rawEvent = buffer.slice(0, separatorIndex);
       buffer = buffer.slice(separatorIndex + 2);
 
-      const dataLine = rawEvent
-        .split("\n")
-        .find((line) => line.startsWith("data: "));
+      const lines = rawEvent.split("\n");
+      const dataLine = lines.find((line) => line.startsWith("data: "));
+      const idLine = lines.find((line) => line.startsWith("id: "));
 
-      if (!dataLine) {
+      if (!dataLine || !idLine) {
         continue;
       }
 
-      events.push(JSON.parse(dataLine.slice(6)) as TaskStreamEvent);
+      events.push({
+        id: Number(idLine.slice(4)),
+        event: JSON.parse(dataLine.slice(6)) as TaskStreamEvent
+      });
     }
   }
 
@@ -57,6 +64,7 @@ async function collectTaskEvents(url: string, expectedCount: number) {
 }
 
 let gatewayServer: WebSocketServer | undefined;
+let gatewayHttpServer: Server | undefined;
 let adapterServer:
   | {
       url: string;
@@ -64,22 +72,108 @@ let adapterServer:
     }
   | undefined;
 
-afterEach(async () => {
-  gatewayServer?.close();
-  gatewayServer = undefined;
+async function createGatewayHarness() {
+  gatewayHttpServer = createServer((request, response) => {
+    response.writeHead(404, { "Content-Type": "application/json" });
+    response.end(JSON.stringify({ message: "not found" }));
+  });
+  gatewayServer = new WebSocketServer({ server: gatewayHttpServer });
 
+  await new Promise<void>((resolve, reject) => {
+    gatewayHttpServer?.listen(0, "127.0.0.1", () => resolve());
+    gatewayHttpServer?.once("error", reject);
+  });
+
+  const address = gatewayHttpServer.address() as AddressInfo;
+  return {
+    wsUrl: `ws://127.0.0.1:${address.port}`
+  };
+}
+
+afterEach(async () => {
   if (adapterServer) {
     await adapterServer.close();
     adapterServer = undefined;
   }
+
+  gatewayServer?.close();
+  gatewayServer = undefined;
+
+  if (gatewayHttpServer) {
+    await new Promise<void>((resolve, reject) => {
+      gatewayHttpServer?.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
+    });
+    gatewayHttpServer = undefined;
+  }
+
 });
 
+function expectedSessionKey(sessionId: string) {
+  return `agent:main:session:${sessionId.toLowerCase()}`;
+}
+
 describe("openclaw adapter server", () => {
+  it("protects internal task endpoints and exposes health and metrics", async () => {
+    adapterServer = await createAdapterServer({
+      gatewayUrl: "ws://127.0.0.1:1",
+      internalToken: "test-internal-token",
+      allowedContentOrigin: "http://minio:9000"
+    });
+
+    const unauthorized = await fetch(`${adapterServer.url}/gateway/tasks/execute`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ taskId: "task", sessionId: "session", message: "hello" })
+    });
+    expect(unauthorized.status).toBe(401);
+    const invalidFileOrigin = await fetch(`${adapterServer.url}/gateway/tasks/execute`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer test-internal-token"
+      },
+      body: JSON.stringify({
+        taskId: "task",
+        sessionId: "session",
+        message: "hello",
+        files: [
+          {
+            fileId: "file",
+            filename: "source.pdf",
+            mimeType: "application/pdf",
+            sizeBytes: 8,
+            storageKey: "users/u/file/source.pdf",
+            contentUrl: "http://127.0.0.1:1234/admin"
+          }
+        ]
+      })
+    });
+    expect(invalidFileOrigin.status).toBe(400);
+    expect((await fetch(`${adapterServer.url}/health/live`)).status).toBe(200);
+    const metrics = await fetch(`${adapterServer.url}/metrics`);
+    expect(metrics.status).toBe(200);
+    expect(await metrics.text()).toContain("clawwork_adapter_executions_total");
+  });
+
   it("executes chat.send through gateway and streams mapped task events", async () => {
     let capturedChatSendParams: Record<string, unknown> | undefined;
+    let connectionCount = 0;
 
-    gatewayServer = new WebSocketServer({ port: 18792 });
-    gatewayServer.on("connection", (socket) => {
+    const harness = await createGatewayHarness();
+    const gatewaySocketServer = gatewayServer;
+    if (!gatewaySocketServer) {
+      throw new Error("gateway server not initialized");
+    }
+
+    gatewaySocketServer.on("connection", (socket) => {
+      connectionCount += 1;
       socket.send(
         JSON.stringify({
           type: "event",
@@ -115,6 +209,7 @@ describe("openclaw adapter server", () => {
 
         if (frame.method === "chat.send") {
           capturedChatSendParams = frame.params;
+          const runId = frame.id === "task-1" ? "run_1" : "run_2";
 
           socket.send(
             JSON.stringify({
@@ -122,7 +217,7 @@ describe("openclaw adapter server", () => {
               id: frame.id,
               ok: true,
               payload: {
-                runId: "run_1",
+                runId,
                 status: "accepted"
               }
             })
@@ -134,11 +229,11 @@ describe("openclaw adapter server", () => {
                 type: "event",
                 event: "agent",
                 payload: {
-                  runId: "run_1",
+                  runId,
                   stream: "assistant",
                   ts: Date.now(),
                   data: {
-                    text: "draft line",
+                    text: frame.id === "task-1" ? "draft line" : "second line",
                     sessionKey: "main"
                   }
                 }
@@ -152,9 +247,9 @@ describe("openclaw adapter server", () => {
                 type: "event",
                 event: "chat",
                 payload: {
-                  runId: "run_1",
+                  runId,
                   sessionKey: "main",
-                  state: "final"
+                  state: frame.id === "task-3" ? "aborted" : "final"
                 }
               })
             );
@@ -164,7 +259,7 @@ describe("openclaw adapter server", () => {
     });
 
     adapterServer = await createAdapterServer({
-      gatewayUrl: "ws://127.0.0.1:18792"
+      gatewayUrl: harness.wsUrl
     });
 
     const executeResponse = await fetch(`${adapterServer.url}/gateway/tasks/execute`, {
@@ -190,20 +285,67 @@ describe("openclaw adapter server", () => {
     };
 
     expect(accepted.runId).toBe("run_1");
-    expect(accepted.sessionKey).toBe("main");
+    expect(accepted.sessionKey).toBe(expectedSessionKey("session-1"));
 
     const streamedEvents = await collectTaskEvents(
       `${adapterServer.url}/gateway/tasks/task-1/events`,
       3
     );
 
-    expect(streamedEvents.map((event) => event.type)).toEqual([
+    expect(streamedEvents.map((item) => item.event.type)).toEqual([
       "task.accepted",
       "task.delta",
       "task.completed"
     ]);
-    expect(streamedEvents[1]?.delta).toBe("draft line");
-    expect(capturedChatSendParams?.sessionKey).toBe("main");
+    expect(streamedEvents[1]?.event.delta).toBe("draft line");
+    expect(capturedChatSendParams?.sessionKey).toBe(expectedSessionKey("session-1"));
     expect(capturedChatSendParams?.idempotencyKey).toBe("task-1");
+
+    const resumedEvents = await collectTaskEvents(
+      `${adapterServer.url}/gateway/tasks/task-1/events`,
+      1,
+      streamedEvents[1]?.id
+    );
+    expect(resumedEvents.map((item) => item.event.type)).toEqual(["task.completed"]);
+
+    const secondResponse = await fetch(`${adapterServer.url}/gateway/tasks/execute`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        taskId: "task-2",
+        sessionId: "session-2",
+        message: "again"
+      })
+    });
+    expect(secondResponse.status).toBe(202);
+    const secondEvents = await collectTaskEvents(
+      `${adapterServer.url}/gateway/tasks/task-2/events`,
+      3
+    );
+    expect(secondEvents.map((item) => item.event.type)).toEqual([
+      "task.accepted",
+      "task.delta",
+      "task.completed"
+    ]);
+
+    const abortedResponse = await fetch(`${adapterServer.url}/gateway/tasks/execute`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        taskId: "task-3",
+        sessionId: "session-3",
+        message: "abort"
+      })
+    });
+    expect(abortedResponse.status).toBe(202);
+    const abortedEvents = await collectTaskEvents(
+      `${adapterServer.url}/gateway/tasks/task-3/events`,
+      3
+    );
+    expect(abortedEvents.at(-1)?.event).toMatchObject({
+      type: "task.failed",
+      code: "GATEWAY_ABORTED"
+    });
+    expect(connectionCount).toBe(1);
   });
 });

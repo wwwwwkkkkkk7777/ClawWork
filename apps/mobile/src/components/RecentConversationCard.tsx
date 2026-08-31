@@ -6,15 +6,23 @@ export function RecentConversationCard(props: {
   subtitle: string;
   status?: string;
   onPress?: () => void;
+  onDelete?: () => void;
 }) {
   return (
-    <Pressable onPress={props.onPress} style={styles.card}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{props.title}</Text>
-        {props.status ? <Text style={styles.status}>{props.status}</Text> : null}
-      </View>
-      <Text style={styles.subtitle}>{props.subtitle}</Text>
-    </Pressable>
+    <View style={styles.card}>
+      <Pressable onPress={props.onPress} style={styles.content}>
+        <View style={styles.header}>
+          <Text style={styles.title}>{props.title}</Text>
+          {props.status ? <Text style={styles.status}>{props.status}</Text> : null}
+        </View>
+        <Text style={styles.subtitle}>{props.subtitle}</Text>
+      </Pressable>
+      {props.onDelete ? (
+        <Pressable accessibilityLabel={`delete ${props.title}`} onPress={props.onDelete}>
+          <Text style={styles.deleteText}>删除</Text>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -30,6 +38,7 @@ const styles = StyleSheet.create({
     elevation: 2,
     gap: 6
   },
+  content: { gap: 6 },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -50,5 +59,6 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 12,
     color: tokens.colors.textMuted
-  }
+  },
+  deleteText: { fontSize: 12, color: "#be123c", fontWeight: "700" }
 });

@@ -1,0 +1,141 @@
+name: clawwork-demo
+
+x-demo-api-environment: &demo-api-environment
+  NODE_ENV: production
+  DATABASE_URL: postgresql://postgres:postgres@postgres:5432/clawwork?schema=public
+  REDIS_URL: redis://redis:6379
+  MINIO_ENDPOINT: http://minio:9000
+  S3_PUBLIC_ENDPOINT: ${DEMO_S3_PUBLIC_ENDPOINT:-http://localhost:9000}
+  S3_REGION: us-east-1
+  S3_ACCESS_KEY: minio
+  S3_SECRET_KEY: minio123
+  S3_BUCKET: clawwork
+  S3_FORCE_PATH_STYLE: "true"
+  S3_AUTO_CREATE_BUCKET: "true"
+  OPENCLAW_GATEWAY_URL: ws://mock-gateway:18789
+  OPENCLAW_ADAPTER_URL: http://adapter:3002
+  JWT_ACCESS_SECRET: local-demo-access-secret-change-before-use
+  JWT_REFRESH_SECRET: local-demo-refresh-secret-change-before-use
+  PASSWORD_PEPPER: local-demo-password-pepper-change-before-use
+  ADAPTER_INTERNAL_TOKEN: local-demo-adapter-token-change-before-use
+  FILE_PARSER_INTERNAL_TOKEN: local-demo-parser-token-change-before-use
+  RESULT_ARTIFACT_ALLOWED_ORIGINS: http://mock-gateway:18789
+  TASK_QUEUE_ATTEMPTS: "2"
+  TASK_QUEUE_CONCURRENCY: "2"
+  MAX_UPLOAD_BYTES: "10485760"
+  MAX_RESULT_FILE_BYTES: "26214400"
+  RATE_LIMIT_ANONYMOUS_PER_MINUTE: "1000"
+  RATE_LIMIT_AUTHENTICATED_PER_MINUTE: "1000"
+  USER_DAILY_TASK_LIMIT: "1000"
+  USER_CONCURRENT_TASK_LIMIT: "10"
+  USER_STORAGE_BYTES: "1073741824"
+  EXPO_PUSH_ENABLED: "false"
+  CORS_ORIGINS: "*"
+  LOG_LEVEL: debug
+
+services:
+  migrate:
+    build:
+      context: ../..
+      dockerfile: infra/docker/mobile-api.Dockerfile
+    environment: *demo-api-environment
+    command: ["pnpm", "prisma:migrate:deploy"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  mock-gateway:
+    build:
+      context: ../..
+      dockerfile: infra/docker/mock-gateway.Dockerfile
+    environment:
+      PORT: "18789"
+      MOCK_GATEWAY_PUBLIC_ORIGIN: http://mock-gateway:18789
+    ports:
+      - "127.0.0.1:18789:18789"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:18789/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  file-parser:
+    build:
+      context: ../..
+      dockerfile: infra/docker/file-parser-worker.Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: "3003"
+      FILE_PARSER_INTERNAL_TOKEN: local-demo-parser-token-change-before-use
+      MAX_PARSE_FILE_BYTES: "26214400"
+      FILE_PARSE_TIMEOUT_MS: "15000"
+      MAX_EXTRACTED_TEXT_CHARS: "1000000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    mem_limit: 512m
+    cpus: 1.0
+    networks: [parser-internal]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3003/health/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  adapter:
+    build:
+      context: ../..
+      dockerfile: infra/docker/openclaw-adapter.Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: "3002"
+      OPENCLAW_GATEWAY_URL: ws://mock-gateway:18789
+      ADAPTER_INTERNAL_TOKEN: local-demo-adapter-token-change-before-use
+      MINIO_ENDPOINT: http://minio:9000
+      FILE_PARSER_URL: http://file-parser:3003
+      FILE_PARSER_INTERNAL_TOKEN: local-demo-parser-token-change-before-use
+      FILE_PARSE_CLIENT_TIMEOUT_MS: "20000"
+      TASK_TIMEOUT_MS: "120000"
+    networks: [default, parser-internal]
+    depends_on:
+      mock-gateway:
+        condition: service_healthy
+      file-parser:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/mobile-api.Dockerfile
+    environment: *demo-api-environment
+    ports:
+      - "${API_BIND_ADDRESS:-127.0.0.1}:3001:3001"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      adapter:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+networks:
+  parser-internal:
+    internal: true

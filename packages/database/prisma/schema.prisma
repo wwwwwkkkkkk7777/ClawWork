@@ -8,55 +8,192 @@ datasource db {
 }
 
 model User {
-  id            String         @id @default(cuid())
-  email         String?        @unique
-  nickname      String
-  createdAt     DateTime       @default(now())
-  sessions      AppSession[]
-  tasks         Task[]
-  refreshTokens RefreshToken[]
+  id                 String              @id @default(cuid())
+  email              String?             @unique
+  nickname           String
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  sessions           AppSession[]
+  tasks              Task[]
+  files              File[]
+  settings           UserSettings?
+  refreshTokens      RefreshToken[]
+  passwordCredential PasswordCredential?
+  resultArtifacts    ResultArtifact[]
+  pushTokens         PushToken[]
 }
 
 model AppSession {
-  id            String   @id @default(cuid())
+  id            String       @id @default(cuid())
   userId        String
   title         String
   status        String
   currentTaskId String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  user          User     @relation(fields: [userId], references: [id])
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  user          User         @relation(fields: [userId], references: [id])
   tasks         Task[]
+  results       TaskResult[]
+
+  @@index([userId, updatedAt])
 }
 
 model Task {
-  id        String       @id @default(cuid())
-  sessionId String
-  userId    String
-  taskType  String
-  status    String
-  createdAt DateTime     @default(now())
-  session   AppSession   @relation(fields: [sessionId], references: [id])
-  user      User         @relation(fields: [userId], references: [id])
-  results   TaskResult[]
+  id               String           @id @default(cuid())
+  sessionId        String
+  userId           String
+  parentTaskId     String?
+  taskType         String
+  status           String
+  inputText        String
+  preferredTone    String
+  preferredLength  String
+  runId            String?
+  adapterStreamUrl String?
+  errorCode        String?
+  errorMessage     String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  startedAt        DateTime?
+  completedAt      DateTime?
+  queueJobId       String?          @unique
+  attemptCount     Int              @default(0)
+  session          AppSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentTask       Task?            @relation("TaskFollowUps", fields: [parentTaskId], references: [id])
+  followUps        Task[]           @relation("TaskFollowUps")
+  results          TaskResult[]
+  files            TaskFile[]
+  events           TaskEvent[]
+  resultArtifacts  ResultArtifact[]
+
+  @@index([userId, createdAt])
+  @@index([sessionId, createdAt])
 }
 
 model TaskResult {
-  id         String   @id @default(cuid())
-  taskId      String
-  versionNo   Int
-  outputText  String
-  outputJson  Json
-  createdAt   DateTime @default(now())
-  task        Task     @relation(fields: [taskId], references: [id])
+  id         String           @id @default(cuid())
+  taskId     String
+  sessionId  String
+  versionNo  Int
+  outputText String
+  outputJson Json
+  createdAt  DateTime         @default(now())
+  task       Task             @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  session    AppSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  artifacts  ResultArtifact[]
 
+  @@unique([sessionId, versionNo])
   @@unique([taskId, versionNo])
+  @@index([sessionId, createdAt])
 }
 
 model RefreshToken {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  tokenHash String   @unique
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id])
+  tokenHash String    @unique
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model PasswordCredential {
+  userId         String    @id
+  passwordHash   String
+  passwordSalt   String
+  failedAttempts Int       @default(0)
+  lockedUntil    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserSettings {
+  userId            String   @id
+  preferredTone     String   @default("balanced")
+  preferredLength   String   @default("standard")
+  preferredLanguage String   @default("zh-CN")
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model File {
+  id          String     @id @default(uuid())
+  userId      String
+  filename    String
+  mimeType    String
+  sizeBytes   Int
+  status      String
+  storageKey  String     @unique
+  contentPath String?
+  etag        String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  uploadedAt  DateTime?
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks       TaskFile[]
+
+  @@index([userId, createdAt])
+}
+
+model ResultArtifact {
+  id          String      @id @default(uuid())
+  userId      String
+  taskId      String
+  resultId    String?
+  kind        String
+  fileName    String
+  mimeType    String
+  sizeBytes   Int
+  storageKey  String      @unique
+  etag        String?
+  previewText String
+  sourceUrl   String?
+  createdAt   DateTime    @default(now())
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task        Task        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  result      TaskResult? @relation(fields: [resultId], references: [id], onDelete: SetNull)
+
+  @@index([taskId])
+  @@index([userId, createdAt])
+  @@index([resultId])
+}
+
+model PushToken {
+  id         String   @id @default(cuid())
+  userId     String
+  token      String   @unique
+  platform   String
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  lastSeenAt DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, enabled])
+}
+
+model TaskFile {
+  taskId String
+  fileId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  file   File   @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, fileId])
+}
+
+model TaskEvent {
+  id            Int      @id @default(autoincrement())
+  taskId        String
+  sourceEventId String?
+  type          String
+  payload       Json
+  createdAt     DateTime @default(now())
+  task          Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, sourceEventId])
+  @@index([taskId, id])
 }

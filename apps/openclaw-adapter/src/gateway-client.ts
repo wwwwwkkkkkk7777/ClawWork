@@ -1,19 +1,27 @@
 import type { GatewayFrame, GatewayRequest } from "@clawwork/openclaw-protocol";
-import type { TaskStreamEvent } from "@clawwork/shared-types";
+import { ArtifactResultSchema, type TaskStreamEvent } from "@clawwork/shared-types";
 import WebSocket from "ws";
 import { mapGatewayError } from "./error-map";
+import {
+  prepareGatewayInput,
+  type GatewayAttachment,
+  type GatewayTaskFile
+} from "./gateway-input";
 
-type ExecuteGatewayTaskInput = {
+export type ExecuteGatewayTaskInput = {
   gatewayUrl: string;
   taskId: string;
   sessionId: string;
   message: string;
+  files?: GatewayTaskFile[];
   gatewayToken?: string;
   gatewayPassword?: string;
+  taskTimeoutMs?: number;
 };
 
-type ExecuteGatewayTaskHandlers = {
+export type ExecuteGatewayTaskHandlers = {
   onEvent: (event: TaskStreamEvent) => void;
+  onControl?: (control: { cancel: () => void; close: () => void }) => void;
 };
 
 type GatewayExecutionError = Error & {
@@ -61,6 +69,19 @@ function nowIsoString() {
 
 function asNonEmptyString(input: unknown): string {
   return typeof input === "string" ? input.trim() : "";
+}
+
+function resolveGatewaySessionKey(params: {
+  sessionId: string;
+  agentId: string;
+  fallback?: string;
+}) {
+  const sessionId = asNonEmptyString(params.sessionId).toLowerCase();
+  if (sessionId) {
+    return `agent:${params.agentId}:session:${sessionId}`;
+  }
+
+  return params.fallback ?? DEFAULT_SESSION_KEY;
 }
 
 function extractContent(content: unknown): string {
@@ -162,7 +183,13 @@ function buildConnectRequest(input: ExecuteGatewayTaskInput): GatewayRequest {
   };
 }
 
-function buildChatRequest(taskId: string, sessionKey: string, message: string): GatewayRequest {
+function buildChatRequest(
+  taskId: string,
+  sessionKey: string,
+  message: string,
+  attachments: GatewayAttachment[],
+  taskTimeoutMs: number
+): GatewayRequest {
   return {
     type: "req",
     id: taskId,
@@ -170,11 +197,83 @@ function buildChatRequest(taskId: string, sessionKey: string, message: string): 
     params: {
       sessionKey,
       message,
+      ...(attachments.length > 0 ? { attachments } : {}),
       thinking: "default",
       idempotencyKey: taskId,
-      timeoutMs: DEFAULT_TASK_TIMEOUT_MS
+      timeoutMs: taskTimeoutMs
     }
   };
+}
+
+function asRecord(input: unknown): Record<string, unknown> | null {
+  return input && typeof input === "object" && !Array.isArray(input)
+    ? (input as Record<string, unknown>)
+    : null;
+}
+
+function normalizeArtifactPayload(input: unknown): unknown {
+  const direct = ArtifactResultSchema.safeParse(input);
+  if (direct.success) {
+    return direct.data;
+  }
+
+  const record = asRecord(input);
+  if (!record) {
+    return null;
+  }
+
+  const embeddedArtifact = asRecord(record.artifact);
+  if (record.type === "artifact" && embeddedArtifact) {
+    return {
+      type: "artifact",
+      artifact: embeddedArtifact
+    };
+  }
+
+  const nestedResult = normalizeArtifactPayload(record.result);
+  if (nestedResult) {
+    return nestedResult;
+  }
+
+  if (
+    typeof record.kind === "string" &&
+    typeof record.fileName === "string" &&
+    typeof record.mimeType === "string" &&
+    typeof record.downloadUrl === "string" &&
+    typeof record.previewText === "string"
+  ) {
+    return {
+      type: "artifact",
+      artifact: {
+        kind: record.kind,
+        fileName: record.fileName,
+        mimeType: record.mimeType,
+        downloadUrl: record.downloadUrl,
+        previewText: record.previewText,
+        ...(typeof record.sizeBytes === "number"
+          ? { sizeBytes: record.sizeBytes }
+          : {})
+      }
+    };
+  }
+
+  return null;
+}
+
+export function extractArtifactResult(...candidates: unknown[]) {
+  for (const candidate of candidates) {
+    const normalized = normalizeArtifactPayload(candidate);
+    if (!normalized) {
+      continue;
+    }
+
+    const parsed = ArtifactResultSchema.safeParse(normalized);
+    if (parsed.success) {
+      return parsed.data;
+    }
+  }
+
+  return null;
 }
 
 function emitAcceptedEvent(
@@ -191,7 +290,7 @@ function emitAcceptedEvent(
   });
 }
 
-function normalizeAssistantDelta(nextSnapshot: string, previousSnapshot: string) {
+export function normalizeAssistantDelta(nextSnapshot: string, previousSnapshot: string) {
   if (!nextSnapshot) {
     return {
       nextDelta: "",
@@ -232,8 +331,19 @@ function toHttpGatewayUrl(gatewayUrl: string) {
 async function executeGatewayTaskViaHttp(
   input: ExecuteGatewayTaskInput,
   handlers: ExecuteGatewayTaskHandlers,
-  sessionKey: string
+  sessionKey: string,
+  preparedInput: {
+    message: string;
+    attachments: GatewayAttachment[];
+  }
 ) {
+  if (preparedInput.attachments.length > 0) {
+    throw toGatewayExecutionError(
+      "HTTP_ATTACHMENTS_UNSUPPORTED",
+      "gateway websocket image attachments are required for image-backed tasks"
+    );
+  }
+
   const agentId = asNonEmptyString(process.env.OPENCLAW_GATEWAY_AGENT_ID) || DEFAULT_AGENT_ID;
   const authSecret =
     asNonEmptyString(input.gatewayToken) || asNonEmptyString(input.gatewayPassword);
@@ -250,10 +360,11 @@ async function executeGatewayTaskViaHttp(
   const response = await fetch(toHttpGatewayUrl(input.gatewayUrl), {
     method: "POST",
     headers,
+    signal: AbortSignal.timeout(input.taskTimeoutMs ?? DEFAULT_TASK_TIMEOUT_MS),
     body: JSON.stringify({
       model: "openclaw",
       stream: false,
-      messages: [{ role: "user", content: input.message }]
+      messages: [{ role: "user", content: preparedInput.message }]
     })
   });
 
@@ -328,6 +439,14 @@ export async function executeGatewayTask(
   input: ExecuteGatewayTaskInput,
   handlers: ExecuteGatewayTaskHandlers
 ) {
+  const agentId = asNonEmptyString(process.env.OPENCLAW_GATEWAY_AGENT_ID) || DEFAULT_AGENT_ID;
+  const preparedInput = await prepareGatewayInput(input.message, input.files).catch((error) => {
+    throw toGatewayExecutionError(
+      "INVALID_REQUEST",
+      error instanceof Error ? error.message : "failed to prepare gateway task input"
+    );
+  });
+
   return await new Promise<{
     taskId: string;
     sessionId: string;
@@ -335,7 +454,11 @@ export async function executeGatewayTask(
     sessionKey: string;
   }>((resolve, reject) => {
     const ws = new WebSocket(input.gatewayUrl);
-    let sessionKey = DEFAULT_SESSION_KEY;
+    let sessionKey = resolveGatewaySessionKey({
+      sessionId: input.sessionId,
+      agentId,
+      fallback: DEFAULT_SESSION_KEY
+    });
     let resolvedRunId = "";
     let lastAssistantSnapshot = "";
     let promiseSettled = false;
@@ -358,6 +481,32 @@ export async function executeGatewayTask(
         ws.close();
       }
     };
+
+    handlers.onControl?.({
+      cancel: () => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: "req",
+            id: `abort:${input.taskId}`,
+            method: "chat.abort",
+            params: {
+              sessionKey,
+              ...(resolvedRunId ? { runId: resolvedRunId } : {})
+            }
+          } satisfies GatewayRequest));
+        }
+        handlers.onEvent({
+          type: "task.cancelled",
+          taskId: input.taskId,
+          sessionId: input.sessionId,
+          runId: resolvedRunId || input.taskId,
+          timestamp: nowIsoString(),
+          message: "task cancelled by user"
+        });
+        cleanup();
+      },
+      close: cleanup
+    });
 
     const resolveAccepted = (result: {
       taskId: string;
@@ -410,7 +559,7 @@ export async function executeGatewayTask(
       fallbackInFlight = true;
       cleanup();
 
-      void executeGatewayTaskViaHttp(input, handlers, sessionKey)
+      void executeGatewayTaskViaHttp(input, handlers, sessionKey, preparedInput)
         .then((result) => {
           if (promiseSettled) {
             return;
@@ -440,8 +589,22 @@ export async function executeGatewayTask(
       }
 
       if (frame.type === "res" && frame.id === CONNECT_REQUEST_ID && frame.ok) {
-        sessionKey = frame.payload.snapshot?.sessionDefaults?.mainSessionKey ?? DEFAULT_SESSION_KEY;
-        ws.send(JSON.stringify(buildChatRequest(input.taskId, sessionKey, input.message)));
+        sessionKey = resolveGatewaySessionKey({
+          sessionId: input.sessionId,
+          agentId,
+          fallback: frame.payload.snapshot?.sessionDefaults?.mainSessionKey ?? DEFAULT_SESSION_KEY
+        });
+        ws.send(
+          JSON.stringify(
+            buildChatRequest(
+              input.taskId,
+              sessionKey,
+              preparedInput.message,
+              preparedInput.attachments,
+              input.taskTimeoutMs ?? DEFAULT_TASK_TIMEOUT_MS
+            )
+          )
+        );
         return;
       }
 
@@ -483,6 +646,22 @@ export async function executeGatewayTask(
 
       if (frame.type === "event" && frame.event === "agent") {
         const runId = frame.payload.runId ?? resolvedRunId;
+        const artifactResult = extractArtifactResult(
+          frame.payload.data,
+          frame.payload.message
+        );
+        if (artifactResult) {
+          handlers.onEvent({
+            type: "task.result.created",
+            taskId: input.taskId,
+            sessionId: input.sessionId,
+            runId,
+            timestamp: nowIsoString(),
+            result: artifactResult
+          });
+          return;
+        }
+
         if (frame.payload.stream === "assistant") {
           const nextSnapshot = String(frame.payload.data?.text ?? "");
           const { nextDelta, nextSnapshot: normalizedSnapshot } = normalizeAssistantDelta(
@@ -518,6 +697,18 @@ export async function executeGatewayTask(
       if (frame.type === "event" && frame.event === "chat") {
         const runId = frame.payload.runId ?? resolvedRunId;
         const state = frame.payload.state ?? "unknown";
+        const artifactResult = extractArtifactResult(frame.payload.message, frame.payload.data);
+
+        if (artifactResult) {
+          handlers.onEvent({
+            type: "task.result.created",
+            taskId: input.taskId,
+            sessionId: input.sessionId,
+            runId,
+            timestamp: nowIsoString(),
+            result: artifactResult
+          });
+        }
 
         if (state === "error") {
           failAfterAccepted(
@@ -529,7 +720,14 @@ export async function executeGatewayTask(
           return;
         }
 
-        if (state === "final" || state === "aborted") {
+        if (state === "aborted") {
+          failAfterAccepted(
+            toGatewayExecutionError("ABORTED", "gateway task was aborted")
+          );
+          return;
+        }
+
+        if (state === "final") {
           handlers.onEvent({
             type: "task.completed",
             taskId: input.taskId,

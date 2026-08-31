@@ -28,6 +28,7 @@ describe("backend smoke", () => {
 
     const taskResponse = await request(app.getHttpServer())
       .post("/tasks")
+      .set("Authorization", `Bearer ${loginResponse.body.accessToken}`)
       .send({
         input: { text: "帮我总结这份文档", fileIds: [] },
         preferredTone: "default",

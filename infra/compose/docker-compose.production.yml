@@ -1,0 +1,235 @@
+name: clawwork
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: clawwork
+      POSTGRES_USER: clawwork
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clawwork -d clawwork"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD}"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a '$${REDIS_PASSWORD}' ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?set S3_SECRET_KEY}
+    volumes:
+      - minio-data:/data
+    ports:
+      - "${S3_BIND_ADDRESS:-127.0.0.1}:9000:9000"
+      - "127.0.0.1:9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  migrate:
+    build:
+      context: ../..
+      dockerfile: infra/docker/mobile-api.Dockerfile
+    environment: &api-environment
+      NODE_ENV: production
+      DATABASE_URL: postgresql://clawwork:${POSTGRES_PASSWORD}@postgres:5432/clawwork?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      MINIO_ENDPOINT: http://minio:9000
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:?set a client-reachable S3_PUBLIC_ENDPOINT}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET:-clawwork}
+      S3_FORCE_PATH_STYLE: "true"
+      S3_AUTO_CREATE_BUCKET: "true"
+      OPENCLAW_GATEWAY_URL: ${OPENCLAW_GATEWAY_URL:?set OPENCLAW_GATEWAY_URL}
+      OPENCLAW_ADAPTER_URL: http://adapter:3002
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET}
+      PASSWORD_PEPPER: ${PASSWORD_PEPPER:?set PASSWORD_PEPPER}
+      ADAPTER_INTERNAL_TOKEN: ${ADAPTER_INTERNAL_TOKEN:?set ADAPTER_INTERNAL_TOKEN}
+      TASK_QUEUE_ATTEMPTS: ${TASK_QUEUE_ATTEMPTS:-5}
+      TASK_QUEUE_CONCURRENCY: ${TASK_QUEUE_CONCURRENCY:-4}
+      MAX_RESULT_FILE_BYTES: ${MAX_RESULT_FILE_BYTES:-26214400}
+      RESULT_ARTIFACT_ALLOWED_ORIGINS: ${RESULT_ARTIFACT_ALLOWED_ORIGINS:?set trusted artifact origins}
+      STALE_UPLOAD_RETENTION_HOURS: ${STALE_UPLOAD_RETENTION_HOURS:-24}
+      UNREFERENCED_FILE_RETENTION_HOURS: ${UNREFERENCED_FILE_RETENTION_HOURS:-168}
+      FILE_CLEANUP_INTERVAL_MS: ${FILE_CLEANUP_INTERVAL_MS:-900000}
+      RATE_LIMIT_ANONYMOUS_PER_MINUTE: ${RATE_LIMIT_ANONYMOUS_PER_MINUTE:-30}
+      RATE_LIMIT_AUTHENTICATED_PER_MINUTE: ${RATE_LIMIT_AUTHENTICATED_PER_MINUTE:-120}
+      USER_DAILY_TASK_LIMIT: ${USER_DAILY_TASK_LIMIT:-100}
+      USER_CONCURRENT_TASK_LIMIT: ${USER_CONCURRENT_TASK_LIMIT:-3}
+      USER_STORAGE_BYTES: ${USER_STORAGE_BYTES:-1073741824}
+      EXPO_PUSH_ENABLED: ${EXPO_PUSH_ENABLED:-false}
+      EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:?set CORS_ORIGINS}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      METRICS_TOKEN: ${METRICS_TOKEN:?set METRICS_TOKEN}
+    command: ["pnpm", "prisma:migrate:deploy"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  adapter:
+    build:
+      context: ../..
+      dockerfile: infra/docker/openclaw-adapter.Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      OPENCLAW_GATEWAY_URL: ${OPENCLAW_GATEWAY_URL:?set OPENCLAW_GATEWAY_URL}
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-}
+      OPENCLAW_GATEWAY_PASSWORD: ${OPENCLAW_GATEWAY_PASSWORD:-}
+      ADAPTER_INTERNAL_TOKEN: ${ADAPTER_INTERNAL_TOKEN:?set ADAPTER_INTERNAL_TOKEN}
+      MINIO_ENDPOINT: http://minio:9000
+      FILE_PARSER_URL: http://file-parser:3003
+      FILE_PARSER_INTERNAL_TOKEN: ${FILE_PARSER_INTERNAL_TOKEN:?set FILE_PARSER_INTERNAL_TOKEN}
+      FILE_PARSE_CLIENT_TIMEOUT_MS: ${FILE_PARSE_CLIENT_TIMEOUT_MS:-20000}
+      TASK_TIMEOUT_MS: ${TASK_TIMEOUT_MS:-120000}
+    networks:
+      - default
+      - parser-internal
+    depends_on:
+      file-parser:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  file-parser:
+    build:
+      context: ../..
+      dockerfile: infra/docker/file-parser-worker.Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3003
+      FILE_PARSER_INTERNAL_TOKEN: ${FILE_PARSER_INTERNAL_TOKEN:?set FILE_PARSER_INTERNAL_TOKEN}
+      MAX_PARSE_FILE_BYTES: ${MAX_PARSE_FILE_BYTES:-26214400}
+      FILE_PARSE_TIMEOUT_MS: ${FILE_PARSE_TIMEOUT_MS:-15000}
+      MAX_EXTRACTED_TEXT_CHARS: ${MAX_EXTRACTED_TEXT_CHARS:-1000000}
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 512m
+    cpus: 1.0
+    networks:
+      - parser-internal
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3003/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/mobile-api.Dockerfile
+    restart: unless-stopped
+    environment: *api-environment
+    ports:
+      - "${API_BIND_ADDRESS:-127.0.0.1}:3001:3001"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      adapter:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  prometheus-config:
+    image: busybox:1.36
+    environment:
+      METRICS_TOKEN: ${METRICS_TOKEN:?set METRICS_TOKEN}
+    volumes:
+      - prometheus-config:/config
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        cat > /config/prometheus.yml <<EOF
+        global:
+          scrape_interval: 15s
+        scrape_configs:
+          - job_name: clawwork-api
+            authorization:
+              credentials: '$${METRICS_TOKEN}'
+            static_configs:
+              - targets: ['api:3001']
+          - job_name: clawwork-adapter
+            static_configs:
+              - targets: ['adapter:3002']
+          - job_name: clawwork-file-parser
+            static_configs:
+              - targets: ['file-parser:3003']
+        EOF
+    restart: "no"
+
+  prometheus:
+    image: prom/prometheus:v3.13.2
+    restart: unless-stopped
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=15d"]
+    volumes:
+      - prometheus-config:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on:
+      prometheus-config:
+        condition: service_completed_successfully
+      api:
+        condition: service_healthy
+    networks:
+      - default
+      - parser-internal
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
+  prometheus-data:
+  prometheus-config:
+
+networks:
+  parser-internal:
+    internal: true

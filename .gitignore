@@ -6,5 +6,8 @@ coverage/
 .env
 .env.*
 !.env.example
+!infra/compose/.env.production.example
 apps/mobile/.expo/
 apps/mobile/.expo-export-check/
+.runtime/
+.omc/logs/

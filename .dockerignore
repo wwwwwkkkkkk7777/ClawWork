@@ -1,0 +1,11 @@
+node_modules
+.git
+.worktrees
+.runtime
+coverage
+**/dist
+apps/mobile/.expo
+.env
+.env.*
+!.env.example
+!infra/compose/.env.production.example

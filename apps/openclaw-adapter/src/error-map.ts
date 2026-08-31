@@ -16,6 +16,8 @@ export function mapGatewayError(code: string) {
       return { code: "GATEWAY_HTTP_ENDPOINT_DISABLED", retryable: false };
     case "EMPTY_RESPONSE":
       return { code: "GATEWAY_EMPTY_RESPONSE", retryable: false };
+    case "ABORTED":
+      return { code: "GATEWAY_ABORTED", retryable: true };
     default:
       return { code: "GATEWAY_ERROR", retryable: false };
   }

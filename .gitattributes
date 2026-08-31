@@ -1,0 +1,17 @@
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+
+# Internal implementation notes are useful in Git, but are not part of release archives.
+/docs/superpowers export-ignore
+/.github export-ignore
+/.git-blame-ignore-revs export-ignore
+/.mailmap export-ignore

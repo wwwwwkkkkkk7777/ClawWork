@@ -1,20 +1,58 @@
+import type { ArtifactResult, FileRecord } from "@clawwork/shared-types";
 import type { TaskStreamEvent } from "../services/stream";
+import type {
+  HistoryTaskDetail,
+  TaskResultVersion
+} from "../services/tasks";
 
 type Listener = () => void;
 
-export type ConversationMessage = {
+export type UserConversationMessage = {
   id: string;
-  role: "user" | "assistant";
+  kind: "user";
+  role: "user";
   text: string;
   runId?: string;
 };
 
+export type AssistantConversationMessage = {
+  id: string;
+  kind: "assistant";
+  role: "assistant";
+  text: string;
+  runId?: string;
+};
+
+export type ArtifactConversationMessage = {
+  id: string;
+  kind: "artifact";
+  artifact: ArtifactResult["artifact"] & { downloadUrl: string };
+  runId?: string;
+};
+
+export type ConversationMessage =
+  | UserConversationMessage
+  | AssistantConversationMessage
+  | ArtifactConversationMessage;
+
 export type RecentConversation = {
   id: string;
+  sessionId?: string;
   title: string;
   subtitle: string;
   status: string;
   prompt: string;
+};
+
+export type PendingAttachment = {
+  clientId: string;
+  fileId?: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  status: "uploading" | "uploaded" | "failed";
+  storageKey?: string;
+  errorMessage?: string;
 };
 
 type TaskState = {
@@ -28,7 +66,10 @@ type TaskState = {
   currentTitle: string;
   currentRunId: string | null;
   messages: ConversationMessage[];
+  pendingAttachments: PendingAttachment[];
   recentConversations: RecentConversation[];
+  resultVersions: TaskResultVersion[];
+  selectedVersionNo: number | null;
 };
 
 const listeners = new Set<Listener>();
@@ -46,32 +87,23 @@ const initialState: TaskState = {
   messages: [
     {
       id: "welcome-assistant",
+      kind: "assistant",
       role: "assistant",
       text: "你好呀！很高兴认识你😊"
     }
   ],
-  recentConversations: [
-    {
-      id: "recent-1",
-      title: "客户会议纪要",
-      subtitle: "昨天 18:42",
-      status: "已完成",
-      prompt: "帮我整理这次客户会议纪要"
-    },
-    {
-      id: "recent-2",
-      title: "邮件草稿",
-      subtitle: "周一",
-      status: "草稿中",
-      prompt: "帮我写一封跟进客户进度的邮件"
-    }
-  ]
+  pendingAttachments: [],
+  recentConversations: [],
+  resultVersions: [],
+  selectedVersionNo: null
 };
 
 const state: TaskState = {
   ...initialState,
   messages: [...initialState.messages],
-  recentConversations: [...initialState.recentConversations]
+  pendingAttachments: [...initialState.pendingAttachments],
+  recentConversations: [...initialState.recentConversations],
+  resultVersions: [...initialState.resultVersions]
 };
 
 let snapshot = createSnapshot();
@@ -80,7 +112,9 @@ function createSnapshot() {
   return {
     ...state,
     messages: [...state.messages],
-    recentConversations: [...state.recentConversations]
+    pendingAttachments: [...state.pendingAttachments],
+    recentConversations: [...state.recentConversations],
+    resultVersions: [...state.resultVersions]
   };
 }
 
@@ -108,7 +142,7 @@ function buildAssistantPreview(text: string) {
   }
 
   if (text.includes("会议") || text.includes("纪要")) {
-    return "收到，我先帮你整理出会议纪要结构，再继续细化重点和待办。";
+    return "收到，我先帮你整理会议纪要结构，再继续细化重点和待办。";
   }
 
   if (text.includes("邮件")) {
@@ -127,6 +161,7 @@ function upsertRecent(prompt: string, status: string) {
   const existingIndex = state.recentConversations.findIndex(
     (item) => item.prompt === prompt
   );
+
   const nextItem: RecentConversation = {
     id:
       existingIndex >= 0
@@ -150,6 +185,7 @@ function pushUserMessage(prompt: string) {
     ...state.messages,
     {
       id: nextId("user"),
+      kind: "user",
       role: "user",
       text: prompt
     }
@@ -162,7 +198,11 @@ function appendAssistantDelta(runId: string, delta: string) {
   }
 
   const lastMessage = state.messages[state.messages.length - 1];
-  if (lastMessage?.role === "assistant" && lastMessage.runId === runId) {
+  if (
+    lastMessage?.kind === "assistant" &&
+    lastMessage.role === "assistant" &&
+    lastMessage.runId === runId
+  ) {
     lastMessage.text += delta;
     return;
   }
@@ -171,11 +211,75 @@ function appendAssistantDelta(runId: string, delta: string) {
     ...state.messages,
     {
       id: nextId("assistant"),
+      kind: "assistant",
       role: "assistant",
       text: delta,
       runId
     }
   ];
+}
+
+function appendArtifactMessage(
+  runId: string,
+  artifact: ArtifactResult["artifact"] & { downloadUrl: string }
+) {
+  const lastMessage = state.messages[state.messages.length - 1];
+  if (
+    lastMessage?.kind === "artifact" &&
+    lastMessage.runId === runId &&
+    lastMessage.artifact.downloadUrl === artifact.downloadUrl
+  ) {
+    return;
+  }
+
+  state.messages = [
+    ...state.messages,
+    {
+      id: nextId("artifact"),
+      kind: "artifact",
+      artifact,
+      runId
+    }
+  ];
+}
+
+function replacePendingAttachment(
+  clientId: string,
+  nextAttachment: PendingAttachment
+) {
+  state.pendingAttachments = state.pendingAttachments.map((attachment) =>
+    attachment.clientId === clientId ? nextAttachment : attachment
+  );
+}
+
+function extractArtifactFromResult(
+  result: Extract<TaskStreamEvent, { type: "task.result.created" }>["result"]
+) {
+  if (!result || typeof result !== "object") {
+    return null;
+  }
+
+  const record = result as {
+    type?: unknown;
+    artifact?: unknown;
+  };
+
+  if (record.type !== "artifact" || !record.artifact || typeof record.artifact !== "object") {
+    return null;
+  }
+
+  const artifact = record.artifact as Partial<ArtifactResult["artifact"]>;
+  if (
+    (artifact.kind === "excel" || artifact.kind === "pdf" || artifact.kind === "docx") &&
+    typeof artifact.fileName === "string" &&
+    typeof artifact.mimeType === "string" &&
+    typeof artifact.downloadUrl === "string" &&
+    typeof artifact.previewText === "string"
+  ) {
+    return artifact as ArtifactResult["artifact"] & { downloadUrl: string };
+  }
+
+  return null;
 }
 
 export const taskStore = {
@@ -189,6 +293,66 @@ export const taskStore = {
   setDraft(text: string) {
     state.draft = text;
     emit();
+  },
+  beginPendingAttachment(input: {
+    filename: string;
+    mimeType: string;
+    sizeBytes: number;
+  }) {
+    const clientId = nextId("attachment");
+    state.pendingAttachments = [
+      ...state.pendingAttachments,
+      {
+        clientId,
+        filename: input.filename,
+        mimeType: input.mimeType,
+        sizeBytes: input.sizeBytes,
+        status: "uploading"
+      }
+    ];
+    emit();
+    return clientId;
+  },
+  completePendingAttachment(clientId: string, file: FileRecord) {
+    replacePendingAttachment(clientId, {
+      clientId,
+      fileId: file.fileId,
+      filename: file.filename,
+      mimeType: file.mimeType,
+      sizeBytes: file.sizeBytes,
+      status: file.status,
+      storageKey: file.storageKey
+    });
+    emit();
+  },
+  failPendingAttachment(clientId: string, errorMessage: string) {
+    const current = state.pendingAttachments.find(
+      (attachment) => attachment.clientId === clientId
+    );
+    if (!current) {
+      return;
+    }
+
+    replacePendingAttachment(clientId, {
+      ...current,
+      status: "failed",
+      errorMessage
+    });
+    emit();
+  },
+  removePendingAttachment(clientId: string) {
+    state.pendingAttachments = state.pendingAttachments.filter(
+      (attachment) => attachment.clientId !== clientId
+    );
+    emit();
+  },
+  getUploadedPendingFileIds() {
+    return state.pendingAttachments
+      .filter(
+        (attachment) =>
+          attachment.status === "uploaded" && typeof attachment.fileId === "string"
+      )
+      .map((attachment) => attachment.fileId as string);
   },
   startConversation(text: string) {
     const prompt = text.trim();
@@ -205,9 +369,13 @@ export const taskStore = {
     state.currentError = null;
     state.currentTitle = buildTitle(prompt);
     state.currentRunId = null;
+    state.pendingAttachments = [];
+    state.resultVersions = [];
+    state.selectedVersionNo = null;
     state.messages = [
       {
         id: nextId("user"),
+        kind: "user",
         role: "user",
         text: prompt
       }
@@ -224,9 +392,11 @@ export const taskStore = {
     state.lastSubmittedTaskText = prompt;
     state.submitCount += 1;
     state.draft = "";
+    state.currentTaskId = null;
     state.currentStatus = "queued";
     state.currentError = null;
     state.currentRunId = null;
+    state.pendingAttachments = [];
     pushUserMessage(prompt);
     upsertRecent(prompt, "处理中");
     emit();
@@ -239,14 +409,17 @@ export const taskStore = {
     state.currentTitle = item.title;
     state.currentRunId = null;
     state.lastSubmittedTaskText = item.prompt;
+    state.pendingAttachments = [];
     state.messages = [
       {
         id: nextId("user"),
+        kind: "user",
         role: "user",
         text: item.prompt
       },
       {
         id: nextId("assistant"),
+        kind: "assistant",
         role: "assistant",
         text: buildAssistantPreview(item.prompt)
       }
@@ -257,11 +430,15 @@ export const taskStore = {
     taskId: string;
     sessionId: string;
     initialStatus: string;
+    errorMessage?: string;
   }) {
     state.currentTaskId = input.taskId;
     state.currentSessionId = input.sessionId;
     state.currentStatus = input.initialStatus;
+    state.currentError = input.errorMessage ?? null;
     if (state.recentConversations[0]) {
+      state.recentConversations[0].id = input.taskId;
+      state.recentConversations[0].sessionId = input.sessionId;
       state.recentConversations[0].status = input.initialStatus;
     }
     emit();
@@ -280,8 +457,18 @@ export const taskStore = {
       return;
     }
 
-    if (event.type === "task.stage.changed" || event.type === "task.result.created") {
+    if (event.type === "task.stage.changed") {
       state.currentStatus = "running";
+      emit();
+      return;
+    }
+
+    if (event.type === "task.result.created") {
+      state.currentStatus = "running";
+      const artifact = extractArtifactFromResult(event.result);
+      if (artifact) {
+        appendArtifactMessage(event.runId, artifact);
+      }
       emit();
       return;
     }
@@ -302,6 +489,16 @@ export const taskStore = {
       return;
     }
 
+    if (event.type === "task.cancelled") {
+      state.currentStatus = "cancelled";
+      state.currentError = null;
+      if (state.recentConversations[0]) {
+        state.recentConversations[0].status = "已取消";
+      }
+      emit();
+      return;
+    }
+
     state.currentStatus = "failed";
     state.currentError = event.message;
     if (state.recentConversations[0]) {
@@ -317,12 +514,116 @@ export const taskStore = {
     }
     emit();
   },
+  beginRetry() {
+    state.currentStatus = "queued";
+    state.currentError = null;
+    emit();
+  },
+  markCancelled() {
+    state.currentStatus = "cancelled";
+    state.currentError = null;
+    if (state.recentConversations[0]) state.recentConversations[0].status = "已取消";
+    emit();
+  },
+  recoverActiveTask(task: {
+    id: string;
+    sessionId: string;
+    inputText: string;
+    status: string;
+  }) {
+    if (state.currentTaskId === task.id) return;
+    state.currentTaskId = task.id;
+    state.currentSessionId = task.sessionId;
+    state.currentStatus = task.status;
+    state.currentError = null;
+    state.currentTitle = buildTitle(task.inputText);
+    state.currentRunId = null;
+    state.lastSubmittedTaskText = task.inputText;
+    state.pendingAttachments = [];
+    state.messages = [{
+      id: `user-${task.id}`,
+      kind: "user",
+      role: "user",
+      text: task.inputText
+    }];
+    emit();
+  },
   hydrateRecentConversations(items: RecentConversation[]) {
-    if (items.length === 0) {
-      return;
+    state.recentConversations = items;
+    emit();
+  },
+  appendRecentConversations(items: RecentConversation[]) {
+    const existing = new Set(state.recentConversations.map((item) => item.id));
+    state.recentConversations = [
+      ...state.recentConversations,
+      ...items.filter((item) => !existing.has(item.id))
+    ];
+    emit();
+  },
+  removeRecentConversation(taskId: string) {
+    state.recentConversations = state.recentConversations.filter(
+      (item) => item.id !== taskId
+    );
+    emit();
+  },
+  hydrateServerConversation(detail: HistoryTaskDetail) {
+    const messages: ConversationMessage[] = [];
+    for (const task of detail.tasks) {
+      messages.push({
+        id: `user-${task.taskId}`,
+        kind: "user",
+        role: "user",
+        text: task.inputText
+      });
+      if (task.result?.outputText) {
+        messages.push({
+          id: `assistant-${task.taskId}`,
+          kind: "assistant",
+          role: "assistant",
+          text: task.result.outputText,
+          runId: task.taskId
+        });
+      }
+      const artifact = task.result
+        ? extractArtifactFromResult(
+            task.result.outputJson as Extract<
+              TaskStreamEvent,
+              { type: "task.result.created" }
+            >["result"]
+          )
+        : null;
+      if (artifact) {
+        messages.push({
+          id: `artifact-${task.taskId}`,
+          kind: "artifact",
+          artifact,
+          runId: task.taskId
+        });
+      }
     }
 
-    state.recentConversations = items;
+    const latestTask = detail.tasks[detail.tasks.length - 1];
+    state.currentTaskId = detail.currentTaskId ?? latestTask?.taskId ?? null;
+    state.currentSessionId = detail.sessionId;
+    state.currentStatus = latestTask?.status ?? detail.status;
+    state.currentError = latestTask?.errorMessage ?? null;
+    state.currentTitle = detail.title;
+    state.currentRunId = null;
+    state.lastSubmittedTaskText = latestTask?.inputText ?? null;
+    state.pendingAttachments = [];
+    state.messages = messages;
+    state.resultVersions = [...detail.versions];
+    state.selectedVersionNo = detail.versions.at(-1)?.versionNo ?? null;
+    emit();
+  },
+  setResultVersions(versions: TaskResultVersion[]) {
+    state.resultVersions = [...versions];
+    state.selectedVersionNo = versions.at(-1)?.versionNo ?? null;
+    emit();
+  },
+  selectResultVersion(versionNo: number) {
+    if (!state.resultVersions.some((version) => version.versionNo === versionNo)) return;
+    state.selectedVersionNo = versionNo;
     emit();
   },
   reset() {
@@ -336,7 +637,10 @@ export const taskStore = {
     state.currentTitle = initialState.currentTitle;
     state.currentRunId = initialState.currentRunId;
     state.messages = [...initialState.messages];
+    state.pendingAttachments = [...initialState.pendingAttachments];
     state.recentConversations = [...initialState.recentConversations];
+    state.resultVersions = [...initialState.resultVersions];
+    state.selectedVersionNo = initialState.selectedVersionNo;
     emit();
   }
 };

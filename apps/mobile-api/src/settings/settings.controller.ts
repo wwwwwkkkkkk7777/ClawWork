@@ -1,31 +1,22 @@
-import { Body, Controller, Get, Put } from "@nestjs/common";
-
-type UserSettings = {
-  preferredTone: string;
-  preferredLength: string;
-};
-
-const defaultSettings: UserSettings = {
-  preferredTone: "balanced",
-  preferredLength: "standard"
-};
+import { Body, Controller, Get, Inject, Put } from "@nestjs/common";
+import { CurrentUser, type AuthenticatedUser } from "../auth/current-user.decorator";
+import { UpdateSettingsDto } from "./settings.dto";
+import { SettingsService } from "./settings.service";
 
 @Controller("settings")
 export class SettingsController {
-  private settings: UserSettings = defaultSettings;
+  constructor(@Inject(SettingsService) private readonly settingsService: SettingsService) {}
 
   @Get()
-  getSettings() {
-    return this.settings;
+  getSettings(@CurrentUser() user: AuthenticatedUser) {
+    return this.settingsService.getSettings(user.id);
   }
 
   @Put()
-  updateSettings(@Body() payload: Partial<UserSettings>) {
-    this.settings = {
-      ...this.settings,
-      ...payload
-    };
-
-    return this.settings;
+  updateSettings(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() payload: UpdateSettingsDto
+  ) {
+    return this.settingsService.updateSettings(user.id, payload);
   }
 }

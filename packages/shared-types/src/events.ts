@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ArtifactResultSchema } from "./files";
 
 const EventBase = z.object({
   taskId: z.string(),
@@ -19,9 +20,13 @@ export const TaskStreamEventSchema = z.discriminatedUnion("type", [
   }),
   EventBase.extend({
     type: z.literal("task.result.created"),
-    result: z.record(z.any())
+    result: z.union([ArtifactResultSchema, z.record(z.any())])
   }),
   EventBase.extend({ type: z.literal("task.completed") }),
+  EventBase.extend({
+    type: z.literal("task.cancelled"),
+    message: z.string()
+  }),
   EventBase.extend({
     type: z.literal("task.failed"),
     code: z.string(),

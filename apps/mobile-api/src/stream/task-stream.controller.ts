@@ -1,106 +1,87 @@
-import { Inject } from "@nestjs/common";
-import { Controller, MessageEvent, Param, Sse } from "@nestjs/common";
+import { Controller, Headers, Inject, MessageEvent, Param, Sse } from "@nestjs/common";
 import { Observable } from "rxjs";
-import type { TaskStreamEvent } from "@clawwork/shared-types";
+import { CurrentUser, type AuthenticatedUser } from "../auth/current-user.decorator";
 import { TasksService } from "../tasks/tasks.service";
+import type { PersistedTaskEvent } from "./task-event-hub";
+
+function isTerminal(event: PersistedTaskEvent) {
+  return event.event.type === "task.completed" || event.event.type === "task.failed" || event.event.type === "task.cancelled";
+}
+
+function parseLastEventId(input: string | undefined) {
+  const parsed = Number(input);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 0;
+}
 
 @Controller("tasks")
 export class TaskStreamController {
   constructor(@Inject(TasksService) private readonly tasksService: TasksService) {}
 
   @Sse(":id/stream")
-  stream(@Param("id") id: string): Observable<MessageEvent> {
-    const source = this.tasksService.getTaskStreamSource(id);
-    if (!source) {
-      return new Observable<MessageEvent>((subscriber) => {
-        subscriber.next({
-          data: {
-            type: "task.accepted",
-            taskId: id,
-            sessionId: "placeholder-session",
-            runId: "placeholder-run",
-            timestamp: new Date().toISOString()
-          }
-        });
-        subscriber.complete();
-      });
-    }
+  stream(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") taskId: string,
+    @Headers("last-event-id") lastEventId?: string
+  ): Observable<MessageEvent> {
+    const afterId = parseLastEventId(lastEventId);
 
     return new Observable<MessageEvent>((subscriber) => {
-      const controller = new AbortController();
+      let closed = false;
+      let replaying = true;
+      let lastSentId = afterId;
+      const liveQueue: PersistedTaskEvent[] = [];
 
-      void (async () => {
-        try {
-          const response = await fetch(source.url, {
-            headers: {
-              Accept: "text/event-stream"
-            },
-            signal: controller.signal
-          });
+      const emit = (persisted: PersistedTaskEvent) => {
+        if (closed || persisted.id <= lastSentId) {
+          return;
+        }
+        lastSentId = persisted.id;
+        subscriber.next({
+          id: String(persisted.id),
+          retry: 1_500,
+          data: persisted.event
+        });
+        if (isTerminal(persisted)) {
+          closed = true;
+          subscriber.complete();
+        }
+      };
 
-          if (!response.ok || !response.body) {
-            throw new Error("adapter stream unavailable");
-          }
+      const unsubscribe = this.tasksService.subscribeTaskEvents(taskId, (event) => {
+        if (replaying) {
+          liveQueue.push(event);
+          return;
+        }
+        emit(event);
+      });
 
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder();
-          let buffer = "";
-
-          while (!controller.signal.aborted) {
-            const { done, value } = await reader.read();
-            if (done) {
+      void this.tasksService
+        .listTaskEvents(user.id, taskId, afterId)
+        .then((replay) => {
+          const ordered = [...replay, ...liveQueue].sort((left, right) => left.id - right.id);
+          for (const event of ordered) {
+            emit(event);
+            if (closed) {
               break;
             }
-
-            buffer += decoder.decode(value, { stream: true });
-
-            while (buffer.includes("\n\n")) {
-              const separatorIndex = buffer.indexOf("\n\n");
-              const rawEvent = buffer.slice(0, separatorIndex);
-              buffer = buffer.slice(separatorIndex + 2);
-
-              const event = parseTaskEvent(rawEvent);
-              if (!event) {
-                continue;
-              }
-
-              this.tasksService.applyStreamEvent(event);
-              subscriber.next({ data: event });
-
-              if (
-                event.type === "task.completed" ||
-                event.type === "task.failed"
-              ) {
-                subscriber.complete();
-                return;
-              }
-            }
           }
-
-          subscriber.complete();
-        } catch (error) {
-          if (controller.signal.aborted) {
-            return;
+          replaying = false;
+          if (closed) {
+            unsubscribe();
           }
-
-          subscriber.error(error);
-        }
-      })();
+        })
+        .catch((error) => {
+          if (!closed) {
+            closed = true;
+            subscriber.error(error);
+          }
+          unsubscribe();
+        });
 
       return () => {
-        controller.abort();
+        closed = true;
+        unsubscribe();
       };
     });
   }
-}
-
-function parseTaskEvent(rawEvent: string) {
-  const dataLine = rawEvent
-    .split("\n")
-    .find((line) => line.startsWith("data: "));
-  if (!dataLine) {
-    return null;
-  }
-
-  return JSON.parse(dataLine.slice(6)) as TaskStreamEvent;
 }

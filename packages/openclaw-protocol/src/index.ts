@@ -55,6 +55,6 @@ export type GatewayEventFrame = {
 export type GatewayRequest = {
   type: "req";
   id: string;
-  method: "connect" | "chat.send";
+  method: "connect" | "chat.send" | "chat.abort";
   params: Record<string, unknown>;
 };

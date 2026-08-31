@@ -5,6 +5,8 @@ export function InputBar(props: {
   value: string;
   onChangeText: (text: string) => void;
   onSend: () => void;
+  onAttach?: () => void;
+  attachDisabled?: boolean;
 }) {
   return (
     <View style={styles.wrapper}>
@@ -17,10 +19,15 @@ export function InputBar(props: {
       />
       <View style={styles.actions}>
         <Pressable accessibilityLabel="voice placeholder" style={styles.iconButton}>
-          <Text style={styles.iconText}>◉</Text>
+          <Text style={styles.iconText}>◎</Text>
         </Pressable>
-        <Pressable accessibilityLabel="more actions" style={styles.iconButton}>
-          <Text style={styles.iconText}>＋</Text>
+        <Pressable
+          accessibilityLabel="attach file"
+          disabled={props.attachDisabled}
+          onPress={props.onAttach}
+          style={styles.iconButton}
+        >
+          <Text style={styles.iconText}>+</Text>
         </Pressable>
         <Pressable
           accessibilityLabel="send message"
