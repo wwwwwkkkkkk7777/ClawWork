@@ -3,11 +3,11 @@ import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import "reflect-metadata";
 import { parseEnv } from "@clawwork/config";
-import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { JsonLogger } from "./observability/json-logger";
 import { ObservabilityService } from "./observability/observability.service";
+import { createRequestValidationPipe } from "./request-validation";
 
 function loadWorkspaceEnv() {
   const candidates = [
@@ -40,13 +40,7 @@ export async function createApp() {
     allowedHeaders: ["Content-Type", "Authorization", "Last-Event-ID", "X-Request-ID"],
     exposedHeaders: ["X-Request-ID"]
   });
-  app.useGlobalPipes(
-    new ValidationPipe({
-      transform: true,
-      whitelist: true,
-      forbidNonWhitelisted: true
-    })
-  );
+  app.useGlobalPipes(createRequestValidationPipe());
   const observability = app.get(ObservabilityService);
   app.use(
     (

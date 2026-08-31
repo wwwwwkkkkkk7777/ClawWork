@@ -67,6 +67,8 @@ function expectedSessionKey(sessionId: string) {
 let gatewayServer: WebSocketServer | undefined;
 let artifactServer: Server | undefined;
 const originalArtifactOrigins = process.env.RESULT_ARTIFACT_ALLOWED_ORIGINS;
+const originalParserUrl = process.env.FILE_PARSER_URL;
+const originalParserToken = process.env.FILE_PARSER_INTERNAL_TOKEN;
 let adapterServer:
   | {
       url: string;
@@ -96,13 +98,32 @@ afterEach(async () => {
   } else {
     process.env.RESULT_ARTIFACT_ALLOWED_ORIGINS = originalArtifactOrigins;
   }
+  if (originalParserUrl === undefined) {
+    delete process.env.FILE_PARSER_URL;
+  } else {
+    process.env.FILE_PARSER_URL = originalParserUrl;
+  }
+  if (originalParserToken === undefined) {
+    delete process.env.FILE_PARSER_INTERNAL_TOKEN;
+  } else {
+    process.env.FILE_PARSER_INTERNAL_TOKEN = originalParserToken;
+  }
 });
 
 describe("task flow through gateway adapter", () => {
   it("forwards task files to the adapter and proxies artifact stream events", async () => {
     let capturedChatSendParams: Record<string, unknown> | undefined;
     const artifactBytes = Buffer.from("archived spreadsheet bytes");
-    artifactServer = createServer((request, response) => {
+    artifactServer = createServer(async (request, response) => {
+      if (request.url === "/parse" && request.method === "POST") {
+        const chunks: Buffer[] = [];
+        for await (const chunk of request) chunks.push(Buffer.from(chunk));
+        expect(request.headers.authorization).toBe("Bearer parser-test-token");
+        expect(Buffer.concat(chunks)).toEqual(Buffer.from("pdf-body"));
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify({ ok: true, text: "parsed pdf body" }));
+        return;
+      }
       if (request.url !== "/weekly-report.xlsx") {
         response.statusCode = 404;
         response.end();
@@ -122,6 +143,8 @@ describe("task flow through gateway adapter", () => {
     }
     const artifactOrigin = `http://127.0.0.1:${artifactAddress.port}`;
     process.env.RESULT_ARTIFACT_ALLOWED_ORIGINS = artifactOrigin;
+    process.env.FILE_PARSER_URL = artifactOrigin;
+    process.env.FILE_PARSER_INTERNAL_TOKEN = "parser-test-token";
 
     gatewayServer = new WebSocketServer({ port: 18793 });
     gatewayServer.on("connection", (socket) => {
@@ -345,6 +368,7 @@ describe("task flow through gateway adapter", () => {
       }
 
       expect(String(capturedChatSendParams?.message ?? "")).toContain("source.pdf");
+      expect(String(capturedChatSendParams?.message ?? "")).toContain("parsed pdf body");
       expect(capturedChatSendParams?.sessionKey).toBe(expectedSessionKey(accepted.sessionId));
       expect(capturedChatSendParams?.attachments).toBeUndefined();
       expect(capturedChatSendParams?.files).toBeUndefined();

@@ -1,5 +1,6 @@
-import { Controller, Delete, Get, Inject, Param, Query } from "@nestjs/common";
+import { Controller, Delete, Get, Inject, Param } from "@nestjs/common";
 import { CurrentUser, type AuthenticatedUser } from "../auth/current-user.decorator";
+import { ValidatedQuery } from "../request-validation";
 import { TasksService } from "../tasks/tasks.service";
 import { HistoryQueryDto } from "../tasks/tasks.dto";
 
@@ -8,7 +9,10 @@ export class HistoryController {
   constructor(@Inject(TasksService) private readonly tasksService: TasksService) {}
 
   @Get("tasks")
-  listTasks(@CurrentUser() user: AuthenticatedUser, @Query() query: HistoryQueryDto) {
+  listTasks(
+    @CurrentUser() user: AuthenticatedUser,
+    @ValidatedQuery(HistoryQueryDto) query: HistoryQueryDto
+  ) {
     return this.tasksService.listHistory(user.id, query);
   }
 

@@ -1,5 +1,4 @@
 import {
-  Body,
   Controller,
   Delete,
   Get,
@@ -8,6 +7,7 @@ import {
   Post
 } from "@nestjs/common";
 import { CurrentUser, type AuthenticatedUser } from "../auth/current-user.decorator";
+import { ValidatedBody } from "../request-validation";
 import { TasksService } from "../tasks/tasks.service";
 import { CompleteUploadDto, CreateUploadDto } from "./files.dto";
 
@@ -18,7 +18,7 @@ export class FilesController {
   @Post("upload-url")
   createUploadUrl(
     @CurrentUser() user: AuthenticatedUser,
-    @Body() payload: CreateUploadDto
+    @ValidatedBody(CreateUploadDto) payload: CreateUploadDto
   ) {
     return this.tasksService.createUploadUrl(user.id, payload);
   }
@@ -26,7 +26,7 @@ export class FilesController {
   @Post("complete")
   completeUpload(
     @CurrentUser() user: AuthenticatedUser,
-    @Body() payload: CompleteUploadDto
+    @ValidatedBody(CompleteUploadDto) payload: CompleteUploadDto
   ) {
     return this.tasksService.completeUpload(user.id, payload);
   }

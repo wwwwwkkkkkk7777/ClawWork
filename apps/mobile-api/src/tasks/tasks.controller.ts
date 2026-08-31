@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Inject, Param, Post } from "@nestjs/common";
+import { Controller, Get, Inject, Param, Post } from "@nestjs/common";
 import { CurrentUser, type AuthenticatedUser } from "../auth/current-user.decorator";
+import { ValidatedBody } from "../request-validation";
 import { CreateTaskDto } from "./tasks.dto";
 import { TasksService } from "./tasks.service";
 
@@ -10,7 +11,7 @@ export class TasksController {
   @Post()
   createTask(
     @CurrentUser() user: AuthenticatedUser,
-    @Body() payload: CreateTaskDto
+    @ValidatedBody(CreateTaskDto) payload: CreateTaskDto
   ) {
     return this.tasksService.createTask(user.id, payload);
   }
@@ -19,7 +20,7 @@ export class TasksController {
   createFollowUp(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id") id: string,
-    @Body() payload: CreateTaskDto
+    @ValidatedBody(CreateTaskDto) payload: CreateTaskDto
   ) {
     return this.tasksService.createFollowUp(user.id, id, payload);
   }
