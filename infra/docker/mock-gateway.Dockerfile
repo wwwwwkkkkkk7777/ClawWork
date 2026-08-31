@@ -1,4 +1,4 @@
-FROM node:22-alpine
+FROM node:26-alpine
 
 RUN apk add --no-cache curl tini && corepack enable && corepack prepare pnpm@10.25.0 --activate
 WORKDIR /app
