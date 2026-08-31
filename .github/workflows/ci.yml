@@ -48,6 +48,7 @@ jobs:
       JWT_REFRESH_SECRET: ci-refresh-secret-at-least-24-characters
       PASSWORD_PEPPER: ci-password-pepper-at-least-24-characters
       ADAPTER_INTERNAL_TOKEN: ci-adapter-token-at-least-24-characters
+      FILE_PARSER_INTERNAL_TOKEN: ci-file-parser-token-at-least-24-characters
       TASK_QUEUE_ATTEMPTS: 1
       POSTGRES_PASSWORD: postgres
       REDIS_PASSWORD: redis-password
