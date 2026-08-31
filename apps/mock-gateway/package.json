@@ -1,0 +1,25 @@
+{
+  "name": "@clawwork/mock-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "main": "src/main.ts",
+  "types": "src/main.ts",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run test"
+  },
+  "dependencies": {
+    "@clawwork/openclaw-protocol": "workspace:*",
+    "tsx": "^4.23.13",
+    "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.15",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

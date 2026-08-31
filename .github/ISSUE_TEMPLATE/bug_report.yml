@@ -1,0 +1,52 @@
+name: Bug report
+description: Report a reproducible ClawWork defect
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: "Do not report vulnerabilities or include secrets. Follow SECURITY.md for private disclosure."
+  - type: input
+    id: revision
+    attributes:
+      label: ClawWork revision
+      description: Commit SHA or release tag.
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment mode
+      options:
+        - Demo Compose with mock Gateway
+        - Local services with real Gateway
+        - Production Compose
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Include minimal inputs and sanitized logs.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed credentials, personal data, private files, and active presigned URLs.
+          required: true

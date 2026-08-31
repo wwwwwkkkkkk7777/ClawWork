@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "ClawWork",
+    "slug": "clawwork",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "plugins": [
+      "expo-notifications",
+      "expo-secure-store"
+    ]
+  }
+}

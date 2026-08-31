@@ -1,0 +1,26 @@
+{
+  "name": "@clawwork/file-parser-worker",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.15",
+    "fflate": "^0.8.3",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "mammoth": "^1.12.2",
+    "pdf-parse": "^2.4.5",
+    "read-excel-file": "^9.3.10",
+    "tsx": "^4.23.13"
+  }
+}
