@@ -36,7 +36,7 @@
     "@types/supertest": "^6.0.3",
     "@types/ws": "^8.18.1",
     "supertest": "^7.1.4",
-    "typescript": "^5.9.3",
+    "typescript": "^7.0.2",
     "tsx": "^4.23.13",
     "vitest": "^3.2.4",
     "ws": "^8.21.3"
