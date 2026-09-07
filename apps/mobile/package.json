@@ -16,15 +16,15 @@
   "dependencies": {
     "@babel/runtime": "^7.28.4",
     "@clawwork/shared-types": "workspace:*",
-    "@expo/metro-runtime": "~57.0.14",
-    "expo": "~57.0.18",
+    "@expo/metro-runtime": "~57.0.15",
+    "expo": "~57.0.20",
     "expo-device": "~57.0.1",
     "expo-document-picker": "~57.0.1",
-    "expo-notifications": "~57.0.15",
-    "expo-secure-store": "~57.0.2",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "react-native": "0.86.3",
+    "expo-notifications": "~57.0.17",
+    "expo-secure-store": "~57.0.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-native": "0.87.1",
     "react-native-web": "~0.21.2"
   },
   "devDependencies": {
